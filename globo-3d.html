@@ -16,68 +16,102 @@
       overflow: hidden;
       background: #000;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
 
-    .senai-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 48px;
-      background: linear-gradient(90deg, #0054a6 0%, #003366 100%);
+    /* Cabeçalho (mesmo layout da index.html) */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      border-bottom: 2px solid #00d4ff;
+      gap: 14px;
+      flex-shrink: 0;
       z-index: 200;
     }
 
-    .header-left {
+    .dev-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35);
+      flex-shrink: 0;
+    }
+
+    .dev-avatar-fallback {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: center;
+      border: 2px solid #00d4ff;
+      flex-shrink: 0;
     }
 
-    .senai-logo-box {
-      background: #fff;
-      color: #0054a6;
-      font-weight: 900;
+    .dev-identity {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .dev-name {
+      color: #0d2137;
       font-size: 16px;
-      padding: 3px 10px;
-      border-radius: 4px;
-      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.3px;
     }
 
-    .project-title {
-      color: #fff;
-      font-size: 12px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    .controls-hint {
-      color: rgba(255,255,255,0.75);
-      font-size: 10px;
-      max-width: 520px;
-      text-align: right;
+    .dev-role {
+      color: #007a94;
+      font-size: 11px;
+      letter-spacing: 0.2px;
       line-height: 1.35;
+    }
+
+    .dev-back-link {
+      color: #0054a6;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 6px 12px;
+      border: 1px solid #00b8d4;
+      border-radius: 6px;
+      transition: background 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .dev-back-link:hover {
+      background: rgba(0, 184, 212, 0.12);
     }
 
     #video-container {
       position: relative;
-      width: 100vw;
-      height: 100vh;
-      padding-top: 48px;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* Webcam de fundo */
     #webcam {
       position: absolute;
-      top: 48px;
+      top: 0;
       left: 0;
       width: 100%;
-      height: calc(100% - 48px);
+      height: 100%;
       object-fit: cover;
       transform: scaleX(-1);
     }
@@ -85,10 +119,10 @@
     /* Canvas transparente onde o Three.js desenha o globo por cima do vídeo */
     #three-canvas {
       position: absolute;
-      top: 48px;
+      top: 0;
       left: 0;
       width: 100%;
-      height: calc(100% - 48px);
+      height: 100%;
       pointer-events: none;
     }
 
@@ -127,14 +161,15 @@
 </head>
 <body>
 
-  <header class="senai-header">
-    <div class="header-left">
-      <div class="senai-logo-box">Senai</div>
-      <span class="project-title">Globo 3D · Hand Tracking</span>
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Globo 3D</span>
+      <span class="dev-role">Mova, gire e dê zoom no planeta Terra com gestos das duas mãos. Mão direita: indicador move, punho para; mão esquerda: avançar gira, pinça dá zoom.</span>
     </div>
-    <span class="controls-hint">
-      Mão dir. indicador: mover · punho: parar · mão esq. avançar: girar · pinça: zoom
-    </span>
+    <a class="dev-back-link" href="index.html">← Início</a>
   </header>
 
   <div id="start-overlay">
@@ -172,10 +207,12 @@
     function initThree() {
       scene = new THREE.Scene();
 
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const stageEl = document.getElementById('video-container');
+      camera = new THREE.PerspectiveCamera(75, stageEl.clientWidth / stageEl.clientHeight, 0.1, 1000);
 
       renderer = new THREE.WebGLRenderer({ canvas: canvasElement, alpha: true, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight - 48);
+      const stage = document.getElementById('video-container');
+      renderer.setSize(stage.clientWidth, stage.clientHeight);
 
       const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
       scene.add(ambientLight);
@@ -212,10 +249,12 @@
 
     /** Ajusta tamanho do renderer quando a janela redimensiona */
     function resizeRenderer() {
-      const h = window.innerHeight - 48;
-      camera.aspect = window.innerWidth / h;
+      const stage = document.getElementById('video-container');
+      const h = stage.clientHeight;
+      const w = stage.clientWidth;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, h);
+      renderer.setSize(w, h);
     }
 
     const hands = new Hands({

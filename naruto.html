@@ -12,108 +12,143 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       overflow: hidden;
       background-color: black;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
 
-    /* Cabeçalho fixo no topo da tela */
-    .senai-header {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 60px;
-      background: linear-gradient(90deg, #0054a6 0%, #003366 100%);
+    /* Cabeçalho (mesmo layout da index.html) */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      gap: 14px;
+      flex-shrink: 0;
       z-index: 100;
-      padding: 0 20px;
-      box-sizing: border-box;
-      border-bottom: 2px solid #00d4ff;
     }
 
-    .senai-logo-area {
+    .dev-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35);
+      flex-shrink: 0;
+    }
+
+    .dev-avatar-fallback {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: center;
+      border: 2px solid #00d4ff;
+      flex-shrink: 0;
     }
 
-    .senai-logo-box {
-      background-color: #ffffff;
+    .dev-identity {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .dev-name {
+      color: #0d2137;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .dev-role {
+      color: #007a94;
+      font-size: 11px;
+      letter-spacing: 0.2px;
+      line-height: 1.35;
+    }
+
+    .dev-back-link {
       color: #0054a6;
-      font-weight: 900;
-      font-size: 22px;
-      letter-spacing: -1px;
-      padding: 4px 12px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 6px 12px;
+      border: 1px solid #00b8d4;
+      border-radius: 6px;
+      transition: background 0.15s ease;
     }
 
-    .project-title {
-      color: #ffffff;
-      font-size: 14px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      font-weight: 600;
-      border-left: 2px solid rgba(255,255,255,0.3);
-      padding-left: 12px;
+    .dev-back-link:hover {
+      background: rgba(0, 184, 212, 0.12);
+    }
+
+    .dev-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
     }
 
     /* Badge de status (mão detectada / escrevendo / aguardando) */
     .status-badge {
-      color: #00fbff;
+      color: #007a94;
       font-size: 12px;
       font-family: monospace;
-      background: rgba(0, 251, 255, 0.1);
+      background: rgba(0, 184, 212, 0.1);
       padding: 4px 8px;
-      border: 1px solid #00fbff;
+      border: 1px solid #00b8d4;
       border-radius: 4px;
     }
 
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
     .btn-clear {
-      color: #ffffff;
+      color: #0d2137;
       font-size: 11px;
       font-family: inherit;
       text-transform: uppercase;
       letter-spacing: 1px;
-      background: rgba(255, 80, 80, 0.2);
-      border: 1px solid #ff6666;
+      background: rgba(255, 80, 80, 0.15);
+      border: 1px solid #c44;
       border-radius: 4px;
       padding: 5px 10px;
       cursor: pointer;
     }
 
     .btn-clear:hover {
-      background: rgba(255, 80, 80, 0.4);
+      background: rgba(255, 80, 80, 0.3);
     }
 
-    .hint-badge {
-      color: rgba(255, 255, 255, 0.75);
-      font-size: 11px;
-      max-width: 280px;
-      text-align: right;
-      line-height: 1.3;
+    .stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* Vídeo da webcam + canvases: espelhados (scaleX -1) como espelho */
     #v_src, #out, #draw {
       position: absolute;
-      top: 60px;
+      top: 0;
       left: 0;
-      width: 100vw;
-      height: calc(100vh - 60px);
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       transform: scaleX(-1);
     }
@@ -124,10 +159,10 @@
     /* Filtro escuro sobre a imagem da câmera */
     .darkness {
       position: absolute;
-      top: 60px;
+      top: 0;
       left: 0;
-      width: 100vw;
-      height: calc(100vh - 60px);
+      width: 100%;
+      height: 100%;
       background: rgba(10, 5, 0, 0.3);
       mix-blend-mode: multiply;
       pointer-events: none;
@@ -152,26 +187,31 @@
 </head>
 <body>
 
-  <header class="senai-header">
-    <div class="senai-logo-area">
-      <div class="senai-logo-box">Senai</div>
-      <div class="project-title">Inovação & Hand Tracking</div>
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Naruto &amp; Sasuke</span>
+      <span class="dev-role">Mão aberta ativa poderes. Pinça ou indicador para desenhar na tela.</span>
     </div>
-    <div class="header-actions">
-      <span class="hint-badge">Pinça ou indicador ↑ para escrever</span>
+    <div class="dev-header-actions">
+      <a class="dev-back-link" href="index.html">← Início</a>
       <button type="button" class="btn-clear" id="btn-clear">Limpar</button>
       <div class="status-badge" id="track-status">SISTEMA PRONTO</div>
     </div>
   </header>
 
-  <!-- Camadas visuais (de baixo para cima): vídeo → desenho → esqueleto → escurecimento → FX -->
-  <video id="v_src" autoplay playsinline></video>
-  <canvas id="draw"></canvas>
-  <canvas id="out"></canvas>
-  <div class="darkness"></div>
+  <div class="stage">
+    <!-- Camadas visuais (de baixo para cima): vídeo → desenho → esqueleto → escurecimento → FX -->
+    <video id="v_src" autoplay playsinline></video>
+    <canvas id="draw"></canvas>
+    <canvas id="out"></canvas>
+    <div class="darkness"></div>
 
-  <video id="n" class="fx" src="assets/naruto.mp4" muted autoplay loop playsinline></video>
-  <video id="s" class="fx" src="assets/sasuke.mp4" muted autoplay loop playsinline></video>
+    <video id="n" class="fx" src="assets/naruto.mp4" muted autoplay loop playsinline></video>
+    <video id="s" class="fx" src="assets/sasuke.mp4" muted autoplay loop playsinline></video>
+  </div>
 
   <script>
     // ========== REFERÊNCIAS DOM ==========
@@ -352,7 +392,7 @@
                 const wrist = pts[0];  // pulso
                 const knk = pts[9];    // base do dedo médio
 
-                const headerOffset = 60; // altura do cabeçalho SENAI
+                const headerOffset = document.querySelector('.dev-header').offsetHeight;
 
                 if (pwr[idx] > 0.01) {
                     if (isR) {
