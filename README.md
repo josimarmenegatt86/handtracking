@@ -10,8 +10,8 @@ Hub de projetos com rastreamento de mãos (MediaPipe) no navegador.
 1. Abra **`index.html`** — página inicial com links para todos os projetos.
 2. Ou abra diretamente:
    - **`naruto.html`** — Naruto/Sasuke + desenho com dedos
-   - **`piano-neon.html`** — Piano neon ([test33](https://smm.axtarget.xyz/test33.html))
-   - **`globo-3d.html`** — Globo 3D ([test6](https://smm.axtarget.xyz/test6.html))
+   - **`piano-neon.html`** — Piano neon
+   - **`globo-3d.html`** — Globo 3D 
 
 ### Naruto (`naruto.html`)
 - **Mão direita aberta:** poder Sasuke
