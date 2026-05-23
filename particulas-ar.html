@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partículas AR · Mundo Real | Josimar Menegatt</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    .dev-header { background: linear-gradient(90deg,#fff 0%,#e8f4fc 50%,#fff 100%); padding:12px 24px; border-bottom:2px solid #00b8d4; display:flex; align-items:center; gap:14px; flex-shrink:0; z-index:300; }
+    .dev-avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid #00d4ff; flex-shrink:0; }
+    .dev-avatar-fallback { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#0054a6,#00d4ff); color:#fff; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; border:2px solid #00d4ff; flex-shrink:0; }
+    .dev-identity { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .dev-name { color:#0d2137; font-size:16px; font-weight:700; }
+    .dev-role { color:#007a94; font-size:11px; line-height:1.35; }
+    .dev-back-link { color:#0054a6; font-size:12px; font-weight:600; text-decoration:none; padding:6px 12px; border:1px solid #00b8d4; border-radius:6px; flex-shrink:0; }
+    .dev-back-link:hover { background:rgba(0,184,212,0.12); }
+    .main-stage { position:relative; flex:1; min-height:0; overflow:hidden; background:#000; }
+    #video-canvas,#three-canvas{position:absolute;inset:0;width:100%;height:100%;}
+    #video-canvas{z-index:1;} #three-canvas{z-index:2;pointer-events:none;}
+    #input_video{display:none;}
+  </style>
+</head>
+<body>
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt" onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Partículas AR</span>
+      <span class="dev-role">Câmera ao vivo + partículas 3D: linha, cubo, esfera ou mapa da Terra conforme gestos das mãos.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+  <div class="main-stage" id="main-stage">
+    <video id="input_video" style="display:none"></video>
+    <canvas id="video-canvas"></canvas>
+    <canvas id="three-canvas"></canvas>
+
+
+    
+    
+    
+
+    
+<script>
+    const stageEl = document.getElementById("main-stage");
+
+        const videoElement = document.getElementById('input_video');
+        const videoCanvas = document.getElementById('video-canvas');
+        const videoCtx = videoCanvas.getContext('2d');
+
+        // --- YÜKSƏK KEYFİYYƏTLİ DÜNYA DATA ANALİZİ ---
+        const mapCanvas = document.createElement('canvas');
+        const mapCtx = mapCanvas.getContext('2d');
+        const mapImg = new Image();
+        mapImg.crossOrigin = "anonymous";
+        mapImg.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Blue_Marble_2002.png/1024px-Blue_Marble_2002.png";
+        
+        let mapData = null;
+        mapImg.onload = () => {
+            mapCanvas.width = 1024;
+            mapCanvas.height = 512;
+            mapCtx.drawImage(mapImg, 0, 0, 1024, 512);
+            mapData = mapCtx.getImageData(0, 0, 1024, 512).data;
+        };
+
+        // --- THREE.JS QURULUMU ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, stageEl.clientWidth / stageEl.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            canvas: document.getElementById('three-canvas'), 
+            alpha: true, 
+            antialias: true 
+        });
+        renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        const particleCount = 40000; 
+        const positions = new Float32Array(particleCount * 3);
+        const targetPositions = new Float32Array(particleCount * 3);
+        const randomSource = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        const colorCyan = new THREE.Color(0x00f2ff);
+
+        for (let i = 0; i < particleCount; i++) {
+            const r = 35 + Math.random() * 20;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            
+            randomSource[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            randomSource[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            randomSource[i * 3 + 2] = r * Math.cos(phi);
+
+            positions[i * 3] = randomSource[i * 3];
+            positions[i * 3 + 1] = randomSource[i * 3 + 1];
+            positions[i * 3 + 2] = randomSource[i * 3 + 2];
+
+            colors[i * 3] = colorCyan.r;
+            colors[i * 3 + 1] = colorCyan.g;
+            colors[i * 3 + 2] = colorCyan.b;
+        }
+
+        const particleGeometry = new THREE.BufferGeometry();
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const particleMaterial = new THREE.PointsMaterial({
+            size: 0.03, 
+            vertexColors: true,
+            transparent: true,
+            opacity: 1.0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particleSystem);
+
+        camera.position.z = 9;
+
+        let mode = "hidden";
+        let rotationY = 0;
+        let rotationX = 0;
+
+        function getRealWorldCoords(i) {
+            const phi = Math.acos(-1 + (2 * i) / particleCount);
+            const theta = Math.sqrt(particleCount * Math.PI) * phi;
+            const u = ((theta % (Math.PI * 2)) / (Math.PI * 2));
+            const v = (phi / Math.PI);
+            const x_map = Math.floor(u * 1023);
+            const y_map = Math.floor(v * 511);
+            
+            let r = 4.2;
+            let targetColor = new THREE.Color();
+
+            if (mapData) {
+                const idx = (y_map * 1024 + x_map) * 4;
+                const g_val = mapData[idx + 1];
+                const b_val = mapData[idx + 2];
+                const isLand = g_val > b_val - 10 && g_val > 45;
+                if (isLand) {
+                    r = 4.4;
+                    targetColor.setRGB(0.1, 0.9, 0.2); 
+                } else {
+                    r = 4.2;
+                    targetColor.setRGB(0.0, 0.3, 1.0);
+                }
+            }
+            return {
+                x: r * Math.sin(phi) * Math.cos(theta),
+                y: r * Math.cos(phi),
+                z: r * Math.sin(phi) * Math.sin(theta),
+                color: targetColor
+            };
+        }
+
+        function updateTargetPositions() {
+            const colorAttr = particleSystem.geometry.attributes.color;
+            for (let i = 0; i < particleCount; i++) {
+                let tx, ty, tz;
+                let targetColor = colorCyan;
+
+                if (mode === "hidden") {
+                    tx = randomSource[i * 3]; ty = randomSource[i * 3 + 1]; tz = randomSource[i * 3 + 2];
+                } else if (mode === "line") {
+                    tx = (Math.random() - 0.5) * 8; ty = (Math.random() - 0.5) * 0.05; tz = (Math.random() - 0.5) * 0.05;
+                } else if (mode === "cube") {
+                    tx = (Math.random() - 0.5) * 5.0; ty = (Math.random() - 0.5) * 5.0; tz = (Math.random() - 0.5) * 5.0;
+                } else if (mode === "sphere") {
+                    const radius = 4.0;
+                    const p = Math.acos(-1 + (2 * i) / particleCount);
+                    const t = Math.sqrt(particleCount * Math.PI) * p;
+                    tx = radius * Math.sin(p) * Math.cos(t); ty = radius * Math.cos(p); tz = radius * Math.sin(p) * Math.sin(t);
+                } else if (mode === "earth") {
+                    const coords = getRealWorldCoords(i);
+                    tx = coords.x; ty = coords.y; tz = coords.z;
+                    targetColor = coords.color;
+                }
+
+                targetPositions[i * 3] = tx;
+                targetPositions[i * 3 + 1] = ty;
+                targetPositions[i * 3 + 2] = tz;
+
+                colorAttr.array[i * 3] = targetColor.r;
+                colorAttr.array[i * 3 + 1] = targetColor.g;
+                colorAttr.array[i * 3 + 2] = targetColor.b;
+            }
+            colorAttr.needsUpdate = true;
+        }
+
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
+
+        function onResults(results) {
+            videoCanvas.width = stageEl.clientWidth;
+            videoCanvas.height = stageEl.clientHeight;
+            
+            videoCtx.save();
+            videoCtx.scale(-1, 1);
+            videoCtx.translate(-videoCanvas.width, 0);
+            
+            // Kamera görüntüsünü mərkəzləşdirib düzgün miqyasda çəkmək (Object-fit: cover məntiqi)
+            const videoRatio = results.image.width / results.image.height;
+            const canvasRatio = videoCanvas.width / videoCanvas.height;
+            let drawWidth, drawHeight, offsetX, offsetY;
+
+            if (videoRatio > canvasRatio) {
+                drawHeight = videoCanvas.height;
+                drawWidth = videoCanvas.height * videoRatio;
+                offsetX = (videoCanvas.width - drawWidth) / 2;
+                offsetY = 0;
+            } else {
+                drawWidth = videoCanvas.width;
+                drawHeight = videoCanvas.width / videoRatio;
+                offsetX = 0;
+                offsetY = (videoCanvas.height - drawHeight) / 2;
+            }
+
+            videoCtx.drawImage(results.image, offsetX, offsetY, drawWidth, drawHeight);
+            videoCtx.restore();
+
+            let rOpen = false, lOpen = false, rVis = false, lVis = false;
+            const pThr = 0.12, fThr = 0.28;
+
+            if (results.multiHandLandmarks) {
+                results.multiHandLandmarks.forEach((landmarks, idx) => {
+                    const label = results.multiHandedness[idx].label;
+                    const d = Math.sqrt(Math.pow(landmarks[4].x - landmarks[8].x, 2) + Math.pow(landmarks[4].y - landmarks[8].y, 2));
+                    if (label === "Left") { 
+                        rVis = true; rOpen = d > pThr; window.rFull = d > fThr;
+                        rotationY = ((1 - landmarks[0].x) - 0.5) * 10;
+                        rotationX = (landmarks[0].y - 0.5) * 10;
+                    } else { 
+                        lVis = true; lOpen = d > pThr; window.lFull = d > fThr;
+                    }
+                });
+            }
+
+            let lastMode = mode;
+            if (rVis && lVis) {
+                if (window.rFull && window.lFull) mode = "sphere";
+                else if (rOpen && lOpen) mode = "cube";
+                else mode = "earth";
+            } else if (rVis) {
+                mode = rOpen ? "line" : "earth";
+            } else mode = "hidden";
+
+            if (lastMode !== mode) updateTargetPositions();
+        }
+
+        hands.onResults(onResults);
+        const cameraFeed = new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 1280, height: 720 });
+        cameraFeed.start();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const posArray = particleSystem.geometry.attributes.position.array;
+            const lerpSpeed = (mode === "earth") ? 0.05 : 0.08;
+            for (let i = 0; i < particleCount * 3; i++) posArray[i] += (targetPositions[i] - posArray[i]) * lerpSpeed;
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+
+            if (mode !== "hidden") {
+                particleSystem.rotation.y += (rotationY - particleSystem.rotation.y) * 0.1;
+                particleSystem.rotation.x += (rotationX - particleSystem.rotation.x) * 0.1;
+                if(mode === "earth") {
+                    particleSystem.rotation.y += 0.003;
+                } else {
+                    particleSystem.rotation.z += 0.005;
+                }
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = stageEl.clientWidth / stageEl.clientHeight; camera.updateProjectionMatrix();
+            renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
+        });
+
+        window.onload = () => { updateTargetPositions(); animate(); };
+    </script>
+  </div>
+</body>
+</html>

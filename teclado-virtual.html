@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<!-- Teclado virtual neon com esqueleto da mão (base: smm.axtarget.xyz/test16.html) -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teclado Virtual Neon | Josimar Menegatt</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; overflow: hidden; background: #000; color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+    .dev-header {
+      background: linear-gradient(90deg, #fff 0%, #e8f4fc 50%, #fff 100%);
+      padding: 12px 24px; border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 200;
+    }
+    .dev-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #00d4ff; flex-shrink: 0; }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff); color: #fff;
+      font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+    #output-text {
+      flex-shrink: 0; width: 80%; max-width: 720px; height: 52px; margin: 12px auto 0;
+      background: rgba(0, 0, 0, 0.8); border: 2px solid #00f3ff; box-shadow: 0 0 15px #00f3ff;
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: clamp(1rem, 4vw, 1.6rem); letter-spacing: 4px; color: #00f3ff;
+      text-shadow: 0 0 10px #00f3ff; z-index: 10;
+    }
+    .main-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    .container { position: absolute; inset: 0; }
+    canvas { position: absolute; width: 100%; height: 100%; }
+    #input_video { display: none; }
+    #loading {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 1.2rem; color: #00f3ff; z-index: 20; text-align: center; pointer-events: none;
+    }
+    #gesture-hint {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      color: #00f3ff; font-size: 0.9rem; text-shadow: 0 0 5px #00f3ff;
+      z-index: 20; text-align: center; pointer-events: none; line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Teclado Virtual Neon</span>
+      <span class="dev-role">Pinça sobre uma tecla para digitar. Mão totalmente aberta apaga letra por letra.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <div id="output-text">ESCREVA</div>
+
+  <div class="main-stage" id="main-stage">
+    <div id="loading">Carregando… Permita o uso da câmera.</div>
+    <div id="gesture-hint">Pressionar: pinça (indicador + polegar)<br>Apagar: abra a mão por completo</div>
+    <div class="container">
+      <video id="input_video" playsinline></video>
+      <canvas id="output_canvas"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const stageEl = document.getElementById('main-stage');
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const outputDiv = document.getElementById('output-text');
+    const loadingDiv = document.getElementById('loading');
+
+    let typedString = '';
+    const keys = 'QWERTYUIOPASDFGHJKLZXCVBNM'.split('');
+    const keyObjects = [];
+    let lastDeleteTime = 0;
+
+    function stageSize() {
+      return { w: stageEl.clientWidth, h: stageEl.clientHeight };
+    }
+
+    function initKeyboard() {
+      const { w: screenWidth, h: screenHeight } = stageSize();
+      keyObjects.length = 0;
+      const keyWidth = Math.min(screenWidth / 13, 70);
+      const keyHeight = keyWidth;
+      const padding = keyWidth * 0.2;
+      const startY = Math.min(120, screenHeight * 0.2);
+      let currentIdx = 0;
+      const rowLayout = [10, 9, 7];
+      rowLayout.forEach((rowSize, rowIndex) => {
+        const rowWidth = rowSize * (keyWidth + padding) - padding;
+        const startX = (screenWidth - rowWidth) / 2;
+        for (let i = 0; i < rowSize; i++) {
+          keyObjects.push({
+            char: keys[currentIdx],
+            x: startX + i * (keyWidth + padding),
+            y: startY + rowIndex * (keyHeight + padding),
+            w: keyWidth,
+            h: keyHeight,
+            pressed: false,
+            lastPressTime: 0
+          });
+          currentIdx++;
+        }
+      });
+    }
+
+    function getDistance(p1, p2) {
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y, (p1.z || 0) - (p2.z || 0));
+    }
+
+    function onResults(results) {
+      loadingDiv.style.display = 'none';
+      const { w, h } = stageSize();
+      if (canvasElement.width !== w) {
+        canvasElement.width = w;
+        canvasElement.height = h;
+      }
+
+      canvasCtx.save();
+      canvasCtx.scale(-1, 1);
+      canvasCtx.translate(-canvasElement.width, 0);
+      canvasCtx.fillStyle = 'black';
+      canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.restore();
+
+      drawKeyboard();
+
+      if (results.multiHandLandmarks) {
+        for (const landmarks of results.multiHandLandmarks) {
+          canvasCtx.save();
+          canvasCtx.scale(-1, 1);
+          canvasCtx.translate(-canvasElement.width, 0);
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#00FF00', lineWidth: 1, radius: 3 });
+          canvasCtx.restore();
+
+          const thumbTip = landmarks[4];
+          const indexTip = landmarks[8];
+          const isPinching = getDistance(thumbTip, indexTip) < 0.05;
+          const wrist = landmarks[0];
+          const tips = [8, 12, 16, 20];
+          const isHandOpen = tips.every((tipIdx) => getDistance(landmarks[tipIdx], wrist) > 0.35);
+
+          if (isHandOpen && typedString.length > 0) {
+            const now = Date.now();
+            if (now - lastDeleteTime > 500) {
+              typedString = typedString.slice(0, -1);
+              outputDiv.innerText = typedString.length > 0 ? typedString : 'O TEXTO APARECE AQUI';
+              lastDeleteTime = now;
+            }
+          }
+
+          const x = (1 - indexTip.x) * canvasElement.width;
+          const y = indexTip.y * canvasElement.height;
+          checkInteraction(x, y, isPinching);
+        }
+      }
+    }
+
+    function drawKeyboard() {
+      keyObjects.forEach((key) => {
+        canvasCtx.beginPath();
+        if (canvasCtx.roundRect) {
+          canvasCtx.roundRect(key.x, key.y, key.w, key.h, 10);
+        } else {
+          canvasCtx.rect(key.x, key.y, key.w, key.h);
+        }
+        canvasCtx.strokeStyle = '#00f3ff';
+        canvasCtx.lineWidth = key.pressed ? 5 : 2;
+        canvasCtx.shadowBlur = key.pressed ? 30 : 10;
+        canvasCtx.shadowColor = '#00f3ff';
+        canvasCtx.fillStyle = key.pressed ? 'rgba(0, 243, 255, 0.5)' : 'rgba(0, 0, 0, 0.7)';
+        canvasCtx.fill();
+        canvasCtx.stroke();
+        canvasCtx.fillStyle = '#00f3ff';
+        canvasCtx.font = `bold ${Math.floor(key.w * 0.4)}px Arial`;
+        canvasCtx.textAlign = 'center';
+        canvasCtx.textBaseline = 'middle';
+        canvasCtx.shadowBlur = 0;
+        canvasCtx.fillText(key.char, key.x + key.w / 2, key.y + key.h / 2);
+      });
+    }
+
+    function checkInteraction(x, y, isPinching) {
+      keyObjects.forEach((key) => {
+        const isOver = x > key.x && x < key.x + key.w && y > key.y && y < key.y + key.h;
+        if (isOver && isPinching) {
+          const now = Date.now();
+          if (!key.pressed && now - key.lastPressTime > 800) {
+            key.pressed = true;
+            key.lastPressTime = now;
+            if (outputDiv.innerText === 'O TEXTO APARECE AQUI' || outputDiv.innerText === 'ESCREVA') {
+              typedString = '';
+            }
+            typedString += key.char;
+            outputDiv.innerText = typedString;
+            setTimeout(() => { key.pressed = false; }, 300);
+          }
+        }
+      });
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+    hands.onResults(onResults);
+
+    const cam = new Camera(videoElement, {
+      onFrame: async () => { await hands.send({ image: videoElement }); },
+      width: 1280,
+      height: 720
+    });
+
+    initKeyboard();
+    cam.start();
+    window.addEventListener('resize', initKeyboard);
+  </script>
+</body>
+</html>

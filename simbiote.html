@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<!-- Simbiote cibernético: esfera de partículas com corrupção e explosão (base: smm.axtarget.xyz/test24.html) -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simbiote Cibernético | Josimar Menegatt</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; overflow: hidden; background: #020202;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+    .dev-header {
+      background: linear-gradient(90deg, #fff 0%, #e8f4fc 50%, #fff 100%);
+      padding: 12px 24px; border-bottom: 2px solid #00b8d4;
+      display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 300;
+    }
+    .dev-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #00d4ff; flex-shrink: 0; }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff); color: #fff;
+      font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .dev-name { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+    .main-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+    #input_video { display: none; }
+    #canvas-container, #canvas-container canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #hand-overlay {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      transform: scaleX(-1); opacity: 0.6;
+    }
+    #glitch-screen {
+      position: absolute; inset: 0; pointer-events: none; z-index: 5; display: none;
+      background: radial-gradient(circle, rgba(255, 0, 51, 0.25) 0%, rgba(0, 0, 0, 0) 75%);
+    }
+    #loading {
+      position: absolute; inset: 0; background: #000; display: flex;
+      align-items: center; justify-content: center; z-index: 100;
+      color: #00d4ff; font-size: 1.1rem;
+    }
+    .main-stage::after {
+      content: " ";
+      position: absolute; inset: 0; pointer-events: none; z-index: 50; opacity: 0.35;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.04));
+      background-size: 100% 3px, 3px 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Simbiote Cibernético</span>
+      <span class="dev-role">Mão direita (azul): gira a esfera. Mão esquerda (vermelha): corrupção roxa. Indicador perto do pulso: explosão.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <div class="main-stage" id="main-stage">
+    <div id="loading">Ativando câmera…</div>
+    <div id="glitch-screen"></div>
+    <video id="input_video" playsinline></video>
+    <canvas id="hand-overlay"></canvas>
+    <div id="canvas-container"></div>
+  </div>
+
+  <script>
+    const stageEl = document.getElementById('main-stage');
+    const videoElement = document.getElementById('input_video');
+    const loadingScreen = document.getElementById('loading');
+    const glitchScreen = document.getElementById('glitch-screen');
+    const handCanvas = document.getElementById('hand-overlay');
+    const handCtx = handCanvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+
+    let scene, camera, renderer, points, geometry, material;
+    const particleCount = 30000;
+    const positions = new Float32Array(particleCount * 3);
+    const originalTargets = new Float32Array(particleCount * 3);
+    let isCorrupted = false;
+    let isExploded = false;
+    let rotationVelocity = { x: 0, y: 0.005 };
+    let currentNoise = 0;
+
+    function resizeStage() {
+      const w = stageEl.clientWidth;
+      const h = stageEl.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      handCanvas.width = w;
+      handCanvas.height = h;
+    }
+
+    function initThree() {
+      const w = stageEl.clientWidth;
+      const h = stageEl.clientHeight;
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        const phi = Math.acos(-1 + (2 * i) / particleCount);
+        const theta = Math.sqrt(particleCount * Math.PI) * phi;
+        const r = 14;
+        originalTargets[i3] = r * Math.cos(theta) * Math.sin(phi);
+        originalTargets[i3 + 1] = r * Math.sin(theta) * Math.sin(phi);
+        originalTargets[i3 + 2] = r * Math.cos(phi);
+        positions[i3] = (Math.random() - 0.5) * 160;
+        positions[i3 + 1] = (Math.random() - 0.5) * 160;
+        positions[i3 + 2] = (Math.random() - 0.5) * 160;
+      }
+
+      geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      material = new THREE.PointsMaterial({
+        size: 0.3, color: 0x00d4ff, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      points = new THREE.Points(geometry, material);
+      scene.add(points);
+      camera.position.z = 55;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = Date.now() * 0.002;
+      const posAttr = geometry.attributes.position.array;
+
+      if (isExploded) {
+        material.color.lerp(new THREE.Color(0xff1100), 0.25);
+        material.size = THREE.MathUtils.lerp(material.size, 1.2, 0.15);
+        currentNoise = THREE.MathUtils.lerp(currentNoise, 100, 0.2);
+        camera.position.x = (Math.random() - 0.5) * 2.5;
+        camera.position.y = (Math.random() - 0.5) * 2.5;
+      } else if (isCorrupted) {
+        material.color.lerp(new THREE.Color(0x9d00ff), 0.15);
+        material.size = THREE.MathUtils.lerp(material.size, 0.5, 0.1);
+        currentNoise = THREE.MathUtils.lerp(currentNoise, 20, 0.08);
+        camera.position.set(0, 0, 55);
+      } else {
+        material.color.lerp(new THREE.Color(0x00d4ff), 0.1);
+        material.size = THREE.MathUtils.lerp(material.size, 0.3, 0.1);
+        currentNoise = THREE.MathUtils.lerp(currentNoise, 1.0, 0.05);
+        camera.position.set(0, 0, 55);
+      }
+
+      for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        if (isExploded) {
+          posAttr[i3] += posAttr[i3] * 0.06 + (Math.random() - 0.5) * 15;
+          posAttr[i3 + 1] += posAttr[i3 + 1] * 0.06 + (Math.random() - 0.5) * 15;
+          posAttr[i3 + 2] += posAttr[i3 + 2] * 0.06 + (Math.random() - 0.5) * 15;
+          if (Math.abs(posAttr[i3]) > 250) posAttr[i3] *= 0.05;
+        } else {
+          let tx = originalTargets[i3];
+          let ty = originalTargets[i3 + 1];
+          let tz = originalTargets[i3 + 2];
+          if (isCorrupted) {
+            tx += Math.sin(time + i * 0.1) * currentNoise;
+            ty += Math.cos(time + i * 0.1) * currentNoise;
+            tz += Math.sin(time * 0.5 + i) * currentNoise;
+          } else {
+            tx += Math.sin(time + i * 0.5) * 0.5;
+            ty += Math.cos(time + i * 0.5) * 0.5;
+          }
+          posAttr[i3] += (tx - posAttr[i3]) * 0.1;
+          posAttr[i3 + 1] += (ty - posAttr[i3 + 1]) * 0.1;
+          posAttr[i3 + 2] += (tz - posAttr[i3 + 2]) * 0.1;
+        }
+      }
+
+      geometry.attributes.position.needsUpdate = true;
+      points.rotation.y += rotationVelocity.y;
+      points.rotation.x += rotationVelocity.x;
+      rotationVelocity.x *= 0.95;
+      rotationVelocity.y = THREE.MathUtils.lerp(rotationVelocity.y, 0.005, 0.05);
+      renderer.render(scene, camera);
+    }
+
+    function onResults(results) {
+      loadingScreen.style.display = 'none';
+      handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+      let leftHandDetected = false;
+
+      if (results.multiHandLandmarks && results.multiHandedness) {
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+          const label = results.multiHandedness[index].label;
+          const isRightHand = label === 'Left';
+          const handColor = isRightHand ? '#00d4ff' : '#ff0033';
+          if (!isRightHand) leftHandDetected = true;
+
+          drawConnectors(handCtx, landmarks, HAND_CONNECTIONS, { color: handColor, lineWidth: 2 });
+          drawLandmarks(handCtx, landmarks, { color: handColor, lineWidth: 1, radius: 2 });
+
+          const wrist = landmarks[0];
+          if (isRightHand) {
+            rotationVelocity.y = (0.5 - wrist.x) * 0.3;
+            rotationVelocity.x = (0.5 - wrist.y) * 0.3;
+          } else {
+            const indexTip = landmarks[8];
+            const dist = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
+            isExploded = dist < 0.18;
+          }
+        });
+      }
+
+      isCorrupted = leftHandDetected;
+      if (isExploded) {
+        glitchScreen.style.display = 'block';
+        glitchScreen.style.background = 'radial-gradient(circle, rgba(255, 0, 51, 0.25) 0%, rgba(0, 0, 0, 0) 75%)';
+      } else if (isCorrupted) {
+        glitchScreen.style.display = 'block';
+        glitchScreen.style.background = 'radial-gradient(circle, rgba(157, 0, 255, 0.2) 0%, rgba(0, 0, 0, 0) 75%)';
+      } else {
+        glitchScreen.style.display = 'none';
+      }
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 2, modelComplexity: 1,
+      minDetectionConfidence: 0.7, minTrackingConfidence: 0.7
+    });
+    hands.onResults(onResults);
+
+    const cameraInstance = new Camera(videoElement, {
+      onFrame: async () => { await hands.send({ image: videoElement }); },
+      width: 1280, height: 720
+    });
+
+    initThree();
+    resizeStage();
+    window.addEventListener('resize', resizeStage);
+    animate();
+    cameraInstance.start().catch(() => {});
+  </script>
+</body>
+</html>

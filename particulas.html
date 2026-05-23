@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<!-- Partículas neon 3D + mãos: formas, rotação e zoom (base: smm.axtarget.xyz/test25.html) -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partículas Neon 3D | Josimar Menegatt</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+
+    .dev-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35);
+      flex-shrink: 0;
+    }
+
+    .dev-avatar-fallback {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #00d4ff;
+      flex-shrink: 0;
+    }
+
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role { color: #007a94; font-size: 11px; line-height: 1.35; }
+
+    .dev-back-link {
+      color: #0054a6;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 6px 12px;
+      border: 1px solid #00b8d4;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    .main-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #three-container,
+    #three-container canvas,
+    #hand-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #hand-canvas {
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    #input-video { display: none; }
+
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #00f2ff;
+      font-size: 1.2rem;
+      text-align: center;
+      text-shadow: 0 0 10px #00f2ff;
+      z-index: 20;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Partículas Neon 3D</span>
+      <span class="dev-role">1 dedo: empurra · 2 dedos: estrela · 3: esfera · mão fechada/aberta: coração. Mão esquerda (pinça): zoom. Indicador gira o conjunto.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <div class="main-stage" id="main-stage">
+    <div id="loading-screen" class="loading">Ativando câmera…</div>
+    <video id="input-video" playsinline></video>
+    <div id="three-container"></div>
+    <canvas id="hand-canvas"></canvas>
+  </div>
+
+  <script>
+    const stageEl = document.getElementById('main-stage');
+    const threeContainer = document.getElementById('three-container');
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    threeContainer.appendChild(renderer.domElement);
+    camera.position.z = 5;
+
+    const particleCount = 15000;
+    const particles = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const targetPositions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      if (Math.random() > 0.5) {
+        colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.85; colors[i * 3 + 2] = 0.0;
+      } else {
+        colors[i * 3] = 0.0; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 1.0;
+      }
+    }
+
+    particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const pMaterial = new THREE.PointsMaterial({
+      size: 0.035,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    const particleSystem = new THREE.Points(particles, pMaterial);
+    scene.add(particleSystem);
+
+    function setHeartShape() {
+      for (let i = 0; i < particleCount; i++) {
+        const r = Math.pow(Math.random(), 0.5);
+        const t = Math.random() * Math.PI * 2;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        const z = (Math.random() - 0.5) * 10;
+        const scale = 0.12 * r;
+        targetPositions[i * 3] = x * scale;
+        targetPositions[i * 3 + 1] = y * scale;
+        targetPositions[i * 3 + 2] = z * scale;
+      }
+    }
+
+    function setStarShape() {
+      for (let i = 0; i < particleCount; i++) {
+        const r = Math.pow(Math.random(), 0.5) * 2.5;
+        const l = i % 5;
+        const angle = (l * 0.8 + Math.random() * 0.1) * Math.PI * 2;
+        targetPositions[i * 3] = Math.cos(angle) * r;
+        targetPositions[i * 3 + 1] = Math.sin(angle) * r;
+        targetPositions[i * 3 + 2] = (Math.random() - 0.5) * r;
+      }
+    }
+
+    function setCircleShape() {
+      for (let i = 0; i < particleCount; i++) {
+        const r = Math.pow(Math.random(), 0.3) * 2.2;
+        const angle = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        targetPositions[i * 3] = r * Math.sin(phi) * Math.cos(angle);
+        targetPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(angle);
+        targetPositions[i * 3 + 2] = r * Math.cos(phi);
+      }
+    }
+
+    setHeartShape();
+
+    const videoElement = document.getElementById('input-video');
+    const handCanvas = document.getElementById('hand-canvas');
+    const handCtx = handCanvas.getContext('2d');
+    const loadingScreen = document.getElementById('loading-screen');
+
+    let handInteractionPoint = new THREE.Vector3();
+    let isInteracting = false;
+    let currentShape = 'heart';
+    let targetRotationX = 0;
+    let targetRotationY = 0;
+    let targetScale = 1;
+
+    function resizeStage() {
+      const w = stageEl.clientWidth;
+      const h = stageEl.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      handCanvas.width = w;
+      handCanvas.height = h;
+    }
+
+    function onResults(results) {
+      loadingScreen.style.display = 'none';
+      handCtx.save();
+      handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+          const label = results.multiHandedness[index].label;
+
+          drawConnectors(handCtx, landmarks, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 5 });
+          drawLandmarks(handCtx, landmarks, { color: '#ffffff', lineWidth: 2, radius: 4 });
+
+          const thumbTip = landmarks[4];
+          const indexTip = landmarks[8];
+
+          targetRotationY = (indexTip.x - 0.5) * Math.PI * 4;
+          targetRotationX = (indexTip.y - 0.5) * Math.PI * 4;
+
+          const x = (indexTip.x - 0.5) * -10;
+          const y = (0.5 - indexTip.y) * 10;
+          handInteractionPoint.set(x, y, 0);
+
+          let extendedFingers = 0;
+          if (landmarks[8].y < landmarks[6].y) extendedFingers++;
+          if (landmarks[12].y < landmarks[10].y) extendedFingers++;
+          if (landmarks[16].y < landmarks[14].y) extendedFingers++;
+
+          if (label === 'Left') {
+            const dist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+            targetScale = THREE.MathUtils.clamp(dist * 6, 0.3, 3);
+          }
+
+          if (extendedFingers === 1) {
+            isInteracting = true;
+          } else if (extendedFingers === 2 && currentShape !== 'star') {
+            setStarShape();
+            currentShape = 'star';
+            isInteracting = false;
+          } else if (extendedFingers === 3 && currentShape !== 'circle') {
+            setCircleShape();
+            currentShape = 'circle';
+            isInteracting = false;
+          } else if (extendedFingers === 0 || extendedFingers > 3) {
+            if (currentShape !== 'heart') {
+              setHeartShape();
+              currentShape = 'heart';
+            }
+            isInteracting = false;
+          }
+        });
+      }
+      handCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      selfieMode: true
+    });
+    hands.onResults(onResults);
+
+    const cameraInput = new Camera(videoElement, {
+      onFrame: async () => { await hands.send({ image: videoElement }); },
+      width: 1280,
+      height: 720
+    });
+    cameraInput.start();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const posAttr = particles.getAttribute('position');
+      for (let i = 0; i < particleCount; i++) {
+        let px = posAttr.array[i * 3];
+        let py = posAttr.array[i * 3 + 1];
+        let pz = posAttr.array[i * 3 + 2];
+
+        const tx = targetPositions[i * 3];
+        const ty = targetPositions[i * 3 + 1];
+        const tz = targetPositions[i * 3 + 2];
+
+        px += (tx - px) * 0.08;
+        py += (ty - py) * 0.08;
+        pz += (tz - pz) * 0.08;
+
+        if (isInteracting) {
+          const dx = px - handInteractionPoint.x;
+          const dy = py - handInteractionPoint.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < 1.2) {
+            const force = (1.2 - distSq) * 0.3;
+            px += dx * force;
+            py += dy * force;
+          }
+        }
+
+        posAttr.array[i * 3] = px;
+        posAttr.array[i * 3 + 1] = py;
+        posAttr.array[i * 3 + 2] = pz;
+      }
+
+      posAttr.needsUpdate = true;
+
+      particleSystem.rotation.x = THREE.MathUtils.lerp(particleSystem.rotation.x, targetRotationX, 0.1);
+      particleSystem.rotation.y = THREE.MathUtils.lerp(particleSystem.rotation.y, targetRotationY, 0.1);
+      particleSystem.scale.lerp(new THREE.Vector3().setScalar(targetScale), 0.1);
+
+      renderer.render(scene, camera);
+    }
+
+    resizeStage();
+    window.addEventListener('resize', resizeStage);
+    animate();
+  </script>
+</body>
+</html>
