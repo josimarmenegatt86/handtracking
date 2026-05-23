@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<!-- Projeto Naruto: hand tracking, efeitos de vídeo e desenho com os dedos -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Naruto Hand Tracking - SENAI</title>
+
+  <!-- MediaPipe: câmera, detecção de mãos e utilitários de desenho no canvas -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: black;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Cabeçalho fixo no topo da tela */
+    .senai-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 60px;
+      background: linear-gradient(90deg, #0054a6 0%, #003366 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      padding: 0 20px;
+      box-sizing: border-box;
+      border-bottom: 2px solid #00d4ff;
+    }
+
+    .senai-logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .senai-logo-box {
+      background-color: #ffffff;
+      color: #0054a6;
+      font-weight: 900;
+      font-size: 22px;
+      letter-spacing: -1px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    .project-title {
+      color: #ffffff;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 600;
+      border-left: 2px solid rgba(255,255,255,0.3);
+      padding-left: 12px;
+    }
+
+    /* Badge de status (mão detectada / escrevendo / aguardando) */
+    .status-badge {
+      color: #00fbff;
+      font-size: 12px;
+      font-family: monospace;
+      background: rgba(0, 251, 255, 0.1);
+      padding: 4px 8px;
+      border: 1px solid #00fbff;
+      border-radius: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-clear {
+      color: #ffffff;
+      font-size: 11px;
+      font-family: inherit;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      background: rgba(255, 80, 80, 0.2);
+      border: 1px solid #ff6666;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    .btn-clear:hover {
+      background: rgba(255, 80, 80, 0.4);
+    }
+
+    .hint-badge {
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 11px;
+      max-width: 280px;
+      text-align: right;
+      line-height: 1.3;
+    }
+
+    /* Vídeo da webcam + canvases: espelhados (scaleX -1) como espelho */
+    #v_src, #out, #draw {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      width: 100vw;
+      height: calc(100vh - 60px);
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #draw { z-index: 1; pointer-events: none; } /* Camada do desenho (persiste entre frames) */
+    #out { z-index: 2; pointer-events: none; }  /* Camada do esqueleto da mão (redesenhada a cada frame) */
+
+    /* Filtro escuro sobre a imagem da câmera */
+    .darkness {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      width: 100vw;
+      height: calc(100vh - 60px);
+      background: rgba(10, 5, 0, 0.3);
+      mix-blend-mode: multiply;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* Vídeos de efeito Naruto/Sasuke posicionados via JavaScript */
+    .fx {
+      position: absolute;
+      height: auto;
+      top: 0;
+      left: 0;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      display: none;
+      mix-blend-mode: screen;
+      z-index: 20;
+    }
+    #n { width: 1600px; } /* Naruto — mão esquerda */
+    #s { width: 2400px; } /* Sasuke — mão direita */
+  </style>
+</head>
+<body>
+
+  <header class="senai-header">
+    <div class="senai-logo-area">
+      <div class="senai-logo-box">Senai</div>
+      <div class="project-title">Inovação & Hand Tracking</div>
+    </div>
+    <div class="header-actions">
+      <span class="hint-badge">Pinça ou indicador ↑ para escrever</span>
+      <button type="button" class="btn-clear" id="btn-clear">Limpar</button>
+      <div class="status-badge" id="track-status">SISTEMA PRONTO</div>
+    </div>
+  </header>
+
+  <!-- Camadas visuais (de baixo para cima): vídeo → desenho → esqueleto → escurecimento → FX -->
+  <video id="v_src" autoplay playsinline></video>
+  <canvas id="draw"></canvas>
+  <canvas id="out"></canvas>
+  <div class="darkness"></div>
+
+  <video id="n" class="fx" src="assets/naruto.mp4" muted autoplay loop playsinline></video>
+  <video id="s" class="fx" src="assets/sasuke.mp4" muted autoplay loop playsinline></video>
+
+  <script>
+    // ========== REFERÊNCIAS DOM ==========
+    const vElement = document.getElementById('v_src');       // Webcam
+    const cElement = document.getElementById('out');         // Canvas do esqueleto
+    const ctx = cElement.getContext('2d');
+    const drawCanvas = document.getElementById('draw');        // Canvas do desenho
+    const drawCtx = drawCanvas.getContext('2d');
+    const n = document.getElementById('n');                    // Vídeo Naruto
+    const s = document.getElementById('s');                    // Vídeo Sasuke
+    const statusBadge = document.getElementById('track-status');
+    const btnClear = document.getElementById('btn-clear');
+
+    // ========== ESTADO GLOBAL ==========
+    // pwr[0]=esquerda, pwr[1]=direita — intensidade do efeito (0 a 1)
+    let pwr = [0, 0];
+    // Evita reiniciar o vídeo a cada frame enquanto a mão continua aberta
+    let wasOpen = [false, false];
+    // Último ponto desenhado por mão (para ligar linhas)
+    let lastDrawPoint = [null, null];
+
+    // Limpa todo o desenho do canvas #draw
+    btnClear.addEventListener('click', () => {
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    });
+
+    /**
+     * Verifica se um dedo está estendido comparando distância
+     * da ponta (tip) e da articulação (pip) até o pulso (0).
+     */
+    function fingerExtended(pts, tipIdx, pipIdx) {
+      const wrist = pts[0];
+      const tip = pts[tipIdx];
+      const pip = pts[pipIdx];
+      return Math.hypot(tip.x - wrist.x, tip.y - wrist.y) >
+             Math.hypot(pip.x - wrist.x, pip.y - wrist.y);
+    }
+
+    /** Pinça: polegar (4) perto do indicador (8) — gesto de "escrever" */
+    function isPinching(pts) {
+      const thumb = pts[4];
+      const index = pts[8];
+      return Math.hypot(thumb.x - index.x, thumb.y - index.y) < 0.07;
+    }
+
+    /** Só o indicador levantado; demais dedos fechados */
+    function isIndexPointing(pts) {
+      if (!fingerExtended(pts, 8, 6)) return false;
+      return !fingerExtended(pts, 12, 10) &&
+             !fingerExtended(pts, 16, 14) &&
+             !fingerExtended(pts, 20, 18);
+    }
+
+    /** Pode desenhar se pinça ou indicador, mas não com mão aberta (poder) */
+    function canWrite(pts) {
+      if (checkOpen(pts)) return false;
+      return isPinching(pts) || isIndexPointing(pts);
+    }
+
+    /** Converte landmark normalizado (0–1) em pixel do canvas de desenho */
+    function tipToCanvas(pts, tipIdx) {
+      const lm = pts[tipIdx];
+      return {
+        x: lm.x * drawCanvas.width,
+        y: lm.y * drawCanvas.height
+      };
+    }
+
+    /** Desenha um segmento de linha no canvas #draw */
+    function strokeLine(from, to, color) {
+      drawCtx.save();
+      drawCtx.strokeStyle = color;
+      drawCtx.lineWidth = 6;
+      drawCtx.lineCap = 'round';
+      drawCtx.lineJoin = 'round';
+      drawCtx.shadowBlur = 12;
+      drawCtx.shadowColor = color;
+      drawCtx.beginPath();
+      drawCtx.moveTo(from.x, from.y);
+      drawCtx.lineTo(to.x, to.y);
+      drawCtx.stroke();
+      drawCtx.restore();
+    }
+
+    /** Redimensiona #draw só quando o vídeo muda (evita apagar o desenho) */
+    function syncDrawCanvasSize(w, h) {
+      if (w <= 0 || h <= 0) return;
+      if (drawCanvas.width === w && drawCanvas.height === h) return;
+      drawCanvas.width = w;
+      drawCanvas.height = h;
+    }
+
+    /**
+     * Mão "aberta": 3+ dedos estendidos (índices MediaPipe: pontas 8,12,16,20 / pips 6,10,14,18).
+     * Ativa os vídeos de poder Naruto/Sasuke.
+     */
+    function checkOpen(pts) {
+        let count = 0;
+        const wrist = pts[0];
+        const tips = [8, 12, 16, 20];
+        const pips = [6, 10, 14, 18];
+        for (let i = 0; i < tips.length; i++) {
+            const tip = pts[tips[i]];
+            const pip = pts[pips[i]];
+            if (Math.hypot(tip.x - wrist.x, tip.y - wrist.y) > Math.hypot(pip.x - wrist.x, pip.y - wrist.y)) count++;
+        }
+        return count >= 3;
+    }
+
+    /**
+     * Callback principal do MediaPipe — executado a cada frame da câmera.
+     */
+    function onResults(res) {
+        const vw = vElement.videoWidth;
+        const vh = vElement.videoHeight;
+        cElement.width = vw;
+        cElement.height = vh;
+        syncDrawCanvasSize(vw, vh);
+        ctx.save();
+        ctx.clearRect(0, 0, cElement.width, cElement.height);
+
+        let fL = false;  // mão esquerda ainda visível neste frame
+        let fR = false;  // mão direita ainda visível neste frame
+        let writingNow = false;
+
+        n.style.display = 'none';
+        s.style.display = 'none';
+
+        if (res.multiHandLandmarks && res.multiHandedness) {
+            res.multiHandLandmarks.forEach((pts, i) => {
+                const label = res.multiHandedness[i].label;
+                const isR = label === 'Right';
+                const idx = isR ? 1 : 0; // índice em pwr / lastDrawPoint
+
+                // Desenha esqueleto da mão (conectores + pontos)
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00fbff';
+                drawConnectors(ctx, pts, HAND_CONNECTIONS, {color: '#00d4ff', lineWidth: 3});
+                drawLandmarks(ctx, pts, {color: '#ffffff', lineWidth: 1, radius: 2});
+                ctx.restore();
+
+                // --- MODO ESCRITA (pinça ou indicador) ---
+                const writing = canWrite(pts);
+                if (writing) {
+                    writingNow = true;
+                    const pt = tipToCanvas(pts, 8); // ponta do indicador
+                    const ink = isR ? '#ff8c42' : '#00fbff';
+                    if (lastDrawPoint[idx]) {
+                        strokeLine(lastDrawPoint[idx], pt, ink);
+                    }
+                    lastDrawPoint[idx] = pt;
+                    // Marcador circular na ponta do dedo (canvas #out)
+                    ctx.save();
+                    ctx.fillStyle = ink;
+                    ctx.shadowBlur = 16;
+                    ctx.shadowColor = ink;
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    lastDrawPoint[idx] = null; // levantou o dedo — nova linha na próxima pinça
+                }
+
+                // --- MODO PODER (mão aberta) ---
+                const open = checkOpen(pts);
+                pwr[idx] += open ? 0.05 : -0.15; // sobe/desce suavemente
+                pwr[idx] = Math.max(0, Math.min(1, pwr[idx]));
+
+                if (open && !wasOpen[idx]) {
+                    const vid = isR ? s : n;
+                    vid.currentTime = 0;
+                    vid.play();
+                }
+                wasOpen[idx] = open;
+
+                const wrist = pts[0];  // pulso
+                const knk = pts[9];    // base do dedo médio
+
+                const headerOffset = 60; // altura do cabeçalho SENAI
+
+                if (pwr[idx] > 0.01) {
+                    if (isR) {
+                        fR = true;
+                        const tx = (wrist.x + knk.x) / 2;
+                        const ty = (wrist.y + knk.y) / 2;
+                        // (1-tx) compensa espelhamento da webcam na posição horizontal do DOM
+                        s.style.left = `${(1 - tx) * window.innerWidth}px`;
+                        s.style.top = `${(ty * (window.innerHeight - headerOffset)) + headerOffset}px`;
+                        s.style.display = 'block';
+                        s.style.opacity = pwr[idx];
+                    } else {
+                        fL = true;
+                        const dx = knk.x - wrist.x;
+                        const dy = knk.y - wrist.y;
+                        const tx = knk.x + (dx * 0.8);
+                        const ty = knk.y + (dy * 0.8);
+                        n.style.left = `${(1 - tx) * window.innerWidth}px`;
+                        n.style.top = `${((ty * (window.innerHeight - headerOffset)) + headerOffset) - 120}px`;
+                        n.style.display = 'block';
+                        n.style.opacity = pwr[idx];
+                    }
+                }
+            });
+
+            // Atualiza texto do badge de status
+            if (writingNow) {
+                statusBadge.innerText = "ESCREVENDO";
+                statusBadge.style.color = "#7fff7f";
+                statusBadge.style.borderColor = "#7fff7f";
+            } else {
+                statusBadge.innerText = "MÃO DETECTADA";
+                statusBadge.style.color = "#00fbff";
+                statusBadge.style.borderColor = "#00fbff";
+            }
+        } else {
+            lastDrawPoint = [null, null];
+            statusBadge.innerText = "AGUARDANDO MÃO...";
+            statusBadge.style.color = "#ff3333";
+            statusBadge.style.borderColor = "#ff3333";
+        }
+
+        // Se a mão sumiu, reduz efeito e reseta gesto "aberto"
+        if (!fL) {
+            lastDrawPoint[0] = null;
+            pwr[0] = Math.max(0, pwr[0] - 0.15);
+            if (pwr[0] > 0.01) { n.style.display = 'block'; n.style.opacity = pwr[0]; }
+            wasOpen[0] = false;
+        }
+        if (!fR) {
+            lastDrawPoint[1] = null;
+            pwr[1] = Math.max(0, pwr[1] - 0.15);
+            if (pwr[1] > 0.01) { s.style.display = 'block'; s.style.opacity = pwr[1]; }
+            wasOpen[1] = false;
+        }
+        ctx.restore();
+    }
+
+    // ========== INICIALIZAÇÃO MEDIAPIPE ==========
+    const h = new Hands({
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+
+    h.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+    });
+
+    h.onResults(onResults);
+
+    // Envia cada frame da webcam para o modelo de mãos
+    const cam = new Camera(vElement, {
+        onFrame: async () => { await h.send({ image: vElement }); },
+        width: 1280, height: 720
+    });
+    cam.start();
+  </script>
+</body>
+</html>

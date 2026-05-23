@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<!-- Globo 3D: controla posição, rotação e zoom da Terra com gestos (Three.js + MediaPipe) -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Globo 3D - Controle por Mãos | SENAI</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .senai-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: linear-gradient(90deg, #0054a6 0%, #003366 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 2px solid #00d4ff;
+      z-index: 200;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .senai-logo-box {
+      background: #fff;
+      color: #0054a6;
+      font-weight: 900;
+      font-size: 16px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .project-title {
+      color: #fff;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .controls-hint {
+      color: rgba(255,255,255,0.75);
+      font-size: 10px;
+      max-width: 520px;
+      text-align: right;
+      line-height: 1.35;
+    }
+
+    #video-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      padding-top: 48px;
+    }
+
+    /* Webcam de fundo */
+    #webcam {
+      position: absolute;
+      top: 48px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 48px);
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    /* Canvas transparente onde o Three.js desenha o globo por cima do vídeo */
+    #three-canvas {
+      position: absolute;
+      top: 48px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 48px);
+      pointer-events: none;
+    }
+
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+      cursor: pointer;
+      text-align: center;
+      padding: 24px;
+    }
+
+    #start-overlay h1 {
+      color: #00ffff;
+      font-size: 26px;
+      margin: 0 0 12px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    #start-overlay p {
+      color: #aaa;
+      margin: 0;
+      font-size: 14px;
+      max-width: 420px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="senai-header">
+    <div class="header-left">
+      <div class="senai-logo-box">Senai</div>
+      <span class="project-title">Globo 3D · Hand Tracking</span>
+    </div>
+    <span class="controls-hint">
+      Mão dir. indicador: mover · punho: parar · mão esq. avançar: girar · pinça: zoom
+    </span>
+  </header>
+
+  <div id="start-overlay">
+    <div>
+      <h1>CLIQUE PARA INICIAR</h1>
+      <p>Permita a câmera. Use as mãos para mover, girar e dar zoom no globo terrestre em 3D.</p>
+    </div>
+  </div>
+
+  <div id="video-container">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="three-canvas"></canvas>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('three-canvas');
+    const startOverlay = document.getElementById('start-overlay');
+
+    // Variáveis Three.js (preenchidas em initThree)
+    let scene, camera, renderer, globe;
+
+    let rotationVelocity = 0.002; // velocidade angular atual do globo
+    let lastZ = null;             // profundidade anterior do indicador (mão esquerda)
+    const friction = 0.99;        // desaceleração da rotação
+
+    let targetPos = { x: 0, y: 0 };   // posição alvo do globo
+    let targetScale = 1.0;            // escala alvo (zoom)
+    const easing = 0.3;               // suavização do movimento
+
+    /**
+     * Cria cena 3D, luzes, globo terrestre e camada de nuvens.
+     * Chamado uma vez ao iniciar o app.
+     */
+    function initThree() {
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+      renderer = new THREE.WebGLRenderer({ canvas: canvasElement, alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight - 48);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      directionalLight.position.set(5, 3, 5);
+      scene.add(directionalLight);
+
+      const loader = new THREE.TextureLoader();
+
+      // Esfera principal — textura da Terra
+      const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+      const material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        shininess: 20,
+        map: loader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg')
+      });
+
+      globe = new THREE.Mesh(geometry, material);
+      scene.add(globe);
+
+      // Esfera um pouco maior com textura de nuvens (filha do globo, gira junto)
+      const cloudGeo = new THREE.SphereGeometry(1.515, 64, 64);
+      const cloudMat = new THREE.MeshPhongMaterial({
+        map: loader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'),
+        transparent: true,
+        opacity: 0.4
+      });
+      const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+      globe.add(clouds);
+
+      camera.position.z = 4; // distância da câmera ao centro do globo
+    }
+
+    /** Ajusta tamanho do renderer quando a janela redimensiona */
+    function resizeRenderer() {
+      const h = window.innerHeight - 48;
+      camera.aspect = window.innerWidth / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, h);
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.75,
+      minTrackingConfidence: 0.75
+    });
+
+    hands.onResults(onResults);
+
+    function getDistance(p1, p2) {
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
+
+    /** Dedo dobrado se a ponta está "abaixo" da articulação no eixo Y da imagem */
+    function isFingerFolded(landmarks, fingerTipIdx, fingerPipIdx) {
+      return landmarks[fingerTipIdx].y > landmarks[fingerPipIdx].y;
+    }
+
+    /** Punho fechado: todos os dedos dobrados */
+    function isHandFist(landmarks) {
+      return isFingerFolded(landmarks, 8, 6) &&
+             isFingerFolded(landmarks, 12, 10) &&
+             isFingerFolded(landmarks, 16, 14) &&
+             isFingerFolded(landmarks, 20, 18);
+    }
+
+    /**
+     * Processa landmarks das mãos e atualiza targetPos, targetScale e rotationVelocity.
+     * Nota: labels MediaPipe são invertidos pela webcam espelhada.
+     */
+    function onResults(results) {
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+
+      let rightHand = null; // mão que move o globo (usuário: direita)
+      let leftHand = null;  // mão que gira/zoom (usuário: esquerda)
+
+      results.multiHandLandmarks.forEach((landmark, index) => {
+        const label = results.multiHandedness[index].label;
+        if (label === 'Left') rightHand = landmark;
+        if (label === 'Right') leftHand = landmark;
+      });
+
+      // --- Mão direita: mover globo com indicador; punho para rotação ---
+      if (rightHand) {
+        const fingerTip = rightHand[8];
+        targetPos.x = ((1 - fingerTip.x) - 0.5) * 8;
+        targetPos.y = -(fingerTip.y - 0.5) * 5 + 1.5;
+        if (isHandFist(rightHand)) rotationVelocity = 0;
+      }
+
+      // --- Mão esquerda: empurrar para frente gira; pinça dá zoom ---
+      if (leftHand) {
+        const currentZ = leftHand[8].z;
+        if (lastZ !== null) {
+          const zDelta = currentZ - lastZ;
+          if (zDelta < -0.002) {
+            rotationVelocity -= Math.abs(zDelta) * 5.0;
+          }
+        }
+        lastZ = currentZ;
+
+        const isMiddleFolded = isFingerFolded(leftHand, 12, 9);
+        const isRingFolded = isFingerFolded(leftHand, 16, 13);
+        const isPinkyFolded = isFingerFolded(leftHand, 20, 17);
+
+        // Pinça: médio, anelar e mindinho fechados; polegar+indicador abertos
+        if (isMiddleFolded && isRingFolded && isPinkyFolded) {
+          const thumbTip = leftHand[4];
+          const indexTip = leftHand[8];
+          const distance = getDistance(thumbTip, indexTip);
+          const newScale = distance * 8.0;
+          targetScale = Math.min(Math.max(newScale, 0.4), 2.8);
+        }
+      } else {
+        lastZ = null;
+      }
+    }
+
+    const cameraInput = new Camera(videoElement, {
+      onFrame: async () => { await hands.send({ image: videoElement }); },
+      width: 1280,
+      height: 720
+    });
+
+    /**
+     * Loop de animação (~60fps): interpola posição/escala e renderiza a cena.
+     */
+    function animate() {
+      requestAnimationFrame(animate);
+
+      globe.position.x += (targetPos.x - globe.position.x) * easing;
+      globe.position.y += (targetPos.y - globe.position.y) * easing;
+
+      globe.scale.x += (targetScale - globe.scale.x) * 0.1;
+      globe.scale.y += (targetScale - globe.scale.y) * 0.1;
+      globe.scale.z += (targetScale - globe.scale.z) * 0.1;
+
+      globe.rotation.y += rotationVelocity;
+
+      if (Math.abs(rotationVelocity) > 0.0001) {
+        rotationVelocity *= friction;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    let started = false;
+
+    async function startApp() {
+      if (started) return;
+      started = true;
+      startOverlay.style.opacity = '0';
+      setTimeout(() => { startOverlay.style.display = 'none'; }, 500);
+      initThree();
+      resizeRenderer();
+      cameraInput.start();
+      animate();
+    }
+
+    startOverlay.addEventListener('click', startApp);
+    document.body.addEventListener('click', () => {
+      if (!started) startApp();
+    }, { once: true });
+
+    window.addEventListener('resize', () => {
+      if (renderer) resizeRenderer();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<!-- Piano Neon: toca notas com pinça (polegar + dedo) detectada pelo MediaPipe -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Neon Piano - SENAI</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      cursor: pointer; /* indica que precisa clicar para iniciar áudio */
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .senai-header {
+      flex-shrink: 0;
+      height: 52px;
+      background: linear-gradient(90deg, #0054a6 0%, #003366 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 2px solid #00d4ff;
+      z-index: 100;
+    }
+
+    .senai-logo-box {
+      background: #fff;
+      color: #0054a6;
+      font-weight: 900;
+      font-size: 18px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .project-title {
+      color: #fff;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-left: 12px;
+      padding-left: 12px;
+      border-left: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* Metade superior: câmera + canvas com máscara quadrada */
+    .camera-panel {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 2px solid rgba(0, 255, 255, 0.25);
+      overflow: hidden;
+    }
+
+    #input_video { display: none; } /* vídeo oculto; só alimenta o MediaPipe */
+
+    #output_canvas {
+      height: 100%;
+      width: auto;
+      max-width: 100%;
+      transform: scaleX(-1); /* espelho */
+    }
+
+    /* Tela inicial até o usuário clicar (libera áudio no navegador) */
+    #status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 50;
+      transition: opacity 0.7s;
+      text-align: center;
+      padding: 20px;
+    }
+
+    #status h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      color: #00ffff;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    #status p {
+      margin: 0;
+      color: #888;
+      font-size: 15px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Metade inferior: teclas do piano */
+    .piano-panel {
+      flex-shrink: 0;
+      height: 42vh;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 32px;
+      background: linear-gradient(to top, #000, #0a0f1a, #000);
+    }
+
+    .piano-keys {
+      display: flex;
+      gap: 14px;
+      height: 100%;
+      max-height: 280px;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .piano-key {
+      flex: 1;
+      border-radius: 24px;
+      border: 2px solid rgba(0, 255, 255, 0.2);
+      background: rgba(0, 255, 255, 0.05);
+      color: #00ffff;
+      font-size: clamp(22px, 4vw, 40px);
+      font-weight: 900;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-shadow: 0 0 10px #00ffff;
+      box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
+      user-select: none;
+      transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Tecla acesa enquanto a nota toca */
+    .key-active {
+      background: rgba(0, 255, 255, 0.6) !important;
+      box-shadow: 0 0 50px #00ffff, inset 0 0 30px #00ffff !important;
+      transform: translateY(10px) scale(0.95);
+      color: #fff;
+      text-shadow: 0 0 20px #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="senai-header">
+    <div class="header-left">
+      <div class="senai-logo-box">Senai</div>
+      <span class="project-title">AI Neon Piano</span>
+    </div>
+    <span class="hint">Pinça polegar + dedo para tocar · Mão esq: DÓ–FÁ · Mão dir: SOL–DÓ+</span>
+  </header>
+
+  <section class="camera-panel">
+    <video id="input_video" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+    <div id="status">
+      <div>
+        <h1>CLIQUE PARA COMEÇAR</h1>
+        <p>Suas mãos serão rastreadas dentro do quadrado neon</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Teclas: id key-C, key-D... correspondem às notas no JavaScript -->
+  <section class="piano-panel">
+    <div class="piano-keys">
+      <div id="key-C" class="piano-key">DÓ</div>
+      <div id="key-D" class="piano-key">RÉ</div>
+      <div id="key-E" class="piano-key">MI</div>
+      <div id="key-F" class="piano-key">FÁ</div>
+      <div id="key-G" class="piano-key">SOL</div>
+      <div id="key-A" class="piano-key">LÁ</div>
+      <div id="key-B" class="piano-key">SI</div>
+      <div id="key-C2" class="piano-key">DÓ+</div>
+    </div>
+  </section>
+
+  <script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusDiv = document.getElementById('status');
+
+    // Web Audio API — só funciona após clique do usuário (initAudio)
+    let audioCtx = null;
+
+    // Frequências em Hz (escala maior de Dó)
+    const frequencies = {
+      C: 261.63, D: 293.66, E: 329.63, F: 349.23,
+      G: 392.00, A: 440.00, B: 493.88, C2: 523.25
+    };
+
+    // Evita disparar a mesma nota várias vezes no mesmo gesto
+    const activeNotes = new Map();
+
+    const BOX_SIZE = 350;           // tamanho do quadrado de recorte da mão
+    const PINCH_THRESHOLD = 0.085;  // distância máxima polegar–dedo para considerar pinça
+
+    /** Cria/resume contexto de áudio e esconde overlay inicial */
+    async function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      statusDiv.style.opacity = '0';
+      setTimeout(() => { statusDiv.style.display = 'none'; }, 700);
+    }
+
+    /**
+     * Toca um tom senoidal curto e ilumina a tecla correspondente.
+     * @param {number} freq - frequência em Hz
+     * @param {string} keyId - ex: 'C', 'G', 'C2'
+     */
+    function playTone(freq, keyId) {
+      if (!audioCtx || audioCtx.state !== 'running') return;
+      if (activeNotes.has(keyId)) return;
+
+      activeNotes.set(keyId, true);
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.6);
+
+      const el = document.getElementById(`key-${keyId}`);
+      if (el) el.classList.add('key-active');
+
+      setTimeout(() => {
+        activeNotes.delete(keyId);
+        if (el) el.classList.remove('key-active');
+      }, 300);
+    }
+
+    function getDistance(p1, p2) {
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
+
+    /** Desenha câmera recortada no quadrado + esqueleto + detecta pinças */
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.fillStyle = '#000000';
+      canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        results.multiHandLandmarks.forEach((landmarks, i) => {
+          // Centro do quadrado = base do dedo médio (landmark 9)
+          const centerX = landmarks[9].x * canvasElement.width;
+          const centerY = landmarks[9].y * canvasElement.height;
+
+          // Recorte: só desenha vídeo dentro do retângulo
+          canvasCtx.save();
+          canvasCtx.beginPath();
+          canvasCtx.rect(centerX - BOX_SIZE / 2, centerY - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE);
+          canvasCtx.clip();
+          canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+          canvasCtx.restore();
+
+          // Borda neon do quadrado
+          canvasCtx.strokeStyle = '#00ffff';
+          canvasCtx.lineWidth = 3;
+          canvasCtx.shadowBlur = 10;
+          canvasCtx.shadowColor = '#00ffff';
+          canvasCtx.strokeRect(centerX - BOX_SIZE / 2, centerY - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE);
+          canvasCtx.shadowBlur = 0;
+
+          // MediaPipe espelha Left/Right — label 'Right' = mão esquerda do usuário na webcam espelhada
+          const isLeftHand = results.multiHandedness[i].label === 'Right';
+
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#ffffff', lineWidth: 1, radius: 2 });
+
+          const thumbTip = landmarks[4];
+          const fingers = [8, 12, 16, 20]; // indicador, médio, anelar, mindinho
+          const leftNotes = ['C', 'D', 'E', 'F'];
+          const rightNotes = ['G', 'A', 'B', 'C2'];
+
+          fingers.forEach((fingerIdx, index) => {
+            const fingerTip = landmarks[fingerIdx];
+            if (getDistance(thumbTip, fingerTip) < PINCH_THRESHOLD) {
+              const note = isLeftHand ? leftNotes[index] : rightNotes[index];
+              if (note) playTone(frequencies[note], note);
+
+              // Feedback visual na ponta do dedo que está pinçando
+              canvasCtx.beginPath();
+              canvasCtx.arc(
+                fingerTip.x * canvasElement.width,
+                fingerTip.y * canvasElement.height,
+                40, 0, Math.PI * 2
+              );
+              canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+              canvasCtx.fill();
+            }
+          });
+        });
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => { await hands.send({ image: videoElement }); },
+      width: 1280,
+      height: 720
+    });
+
+    window.onload = () => {
+      canvasElement.width = 1280;
+      canvasElement.height = 720;
+      camera.start();
+      document.body.onclick = initAudio;
+    };
+  </script>
+</body>
+</html>
