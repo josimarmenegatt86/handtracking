@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<!--
+  handrhythm.html — Hand Rhythm standalone (HTML + CSS + JS + MediaPipe via CDN).
+  Toque as bolinhas que caem nas colunas usando os dedos indicadores.
+  Não precisa de npm/Next.js para rodar.
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hand Rhythm — Hand Tracking | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera, detecção de mãos e utilitários de desenho -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    /* ── Área de jogo ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0;
+      overflow: hidden; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: #000;
+    }
+
+    /* HUD */
+    .hud {
+      position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; gap: 2rem;
+      padding: 0.6rem 2rem;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px;
+      font-family: monospace; font-size: 1.3rem; font-weight: 700;
+    }
+    .hud .score-val { color: #a78bfa; }
+    .hud .combo-val { color: #34d399; }
+    .hud .lives-val { color: #ef4444; }
+
+    /* Overlays */
+    .overlay {
+      position: absolute; inset: 0; z-index: 30;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.88); backdrop-filter: blur(12px);
+    }
+    .overlay.visible { display: flex; }
+    .modal {
+      padding: 2.5rem; border-radius: 1.5rem; text-align: center;
+      background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
+      max-width: 30rem; margin: 1rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .modal h1 {
+      font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; margin-bottom: 1rem;
+      background: linear-gradient(90deg, #a78bfa, #ec4899, #f97316);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .modal p { color: #d1d5db; margin-bottom: 0.6rem; line-height: 1.6; }
+    .modal .hint {
+      font-size: 0.85rem; color: #6b7280;
+      border-top: 1px solid #1f2937; padding-top: 1rem; margin-top: 1rem;
+    }
+    .btn-start {
+      margin-top: 1.5rem; padding: 0.9rem 2.5rem;
+      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+      color: #fff; font-weight: 700; font-size: 1.1rem;
+      border: none; border-radius: 9999px; cursor: pointer;
+      box-shadow: 0 0 20px rgba(124,58,237,0.5); letter-spacing: 0.08em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-start:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(167,139,250,0.7); }
+
+    /* Feedback de acerto/erro flutuante */
+    .feedback {
+      position: absolute; font-size: 2rem; font-weight: 900;
+      pointer-events: none; z-index: 25; animation: floatUp 0.8s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateY(0) scale(1.2); }
+      100% { opacity: 0; transform: translateY(-80px) scale(0.8); }
+    }
+
+    #gameCanvas {
+      display: block; position: relative; z-index: 1;
+      max-width: 100%; max-height: 100%;
+    }
+
+    .footer-status {
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
+      color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão do projeto ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="../assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Hand Rhythm</span>
+      <span class="dev-role">Toque as bolinhas coloridas com o indicador quando chegarem à zona de acerto. Combo multiplica pontos.</span>
+    </div>
+    <a class="dev-back-link" href="../index.html">← Início</a>
+  </header>
+
+  <!-- ── Área principal do jogo ── -->
+  <div class="main-stage" id="mainStage">
+
+    <!-- HUD -->
+    <div class="hud">
+      <span>SCORE <span class="score-val" id="scoreDisplay">0</span></span>
+      <span style="color:#555">|</span>
+      <span>COMBO <span class="combo-val" id="comboDisplay">×1</span></span>
+      <span style="color:#555">|</span>
+      <span>VIDAS <span class="lives-val" id="livesDisplay">♥♥♥</span></span>
+    </div>
+
+    <!-- Tela inicial -->
+    <div class="overlay visible" id="overlayStart">
+      <div class="modal">
+        <div id="loader" style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+          <div style="width:4rem;height:4rem;border:4px solid rgba(167,139,250,0.3);border-top-color:#a78bfa;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+          <p style="color:#a78bfa;font-family:monospace;letter-spacing:0.1em">INICIALIZANDO...</p>
+        </div>
+        <div id="startContent" style="display:none">
+          <h1>HAND RHYTHM</h1>
+          <p>Bolinhas caem em <strong style="color:#a78bfa">4 colunas</strong>.</p>
+          <p>Toque com o <strong style="color:#34d399">indicador</strong> quando chegarem à zona de acerto.</p>
+          <p>Acertos consecutivos aumentam o <strong style="color:#f97316">combo</strong> e os pontos.</p>
+          <p class="hint">Permita acesso à câmera · 1 ou 2 mãos</p>
+          <button class="btn-start" type="button" id="btnStart">INICIAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de game over -->
+    <div class="overlay" id="overlayEnd">
+      <div class="modal">
+        <h1>GAME OVER</h1>
+        <p>Pontuação: <strong id="finalScore" style="color:#a78bfa">0</strong></p>
+        <p>Melhor combo: <strong id="finalCombo" style="color:#34d399">×1</strong></p>
+        <button class="btn-start" type="button" id="btnRetry">TENTAR DE NOVO</button>
+      </div>
+    </div>
+
+    <!-- Webcam oculta + canvas do jogo -->
+    <video id="video" playsinline hidden></video>
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <p class="footer-status">HAND RHYTHM · ONLINE</p>
+  </div><!-- fim .main-stage -->
+
+  <script>
+    /**
+     * Hand Rhythm — jogo de ritmo controlado pelos dedos indicadores.
+     * 4 colunas de bolinhas caem; o jogador toca com o indicador na zona de acerto.
+     * Combo multiplica a pontuação; errar ou deixar passar reduz vidas.
+     */
+    const game = {
+      // ── Referências DOM ──
+      get canvas() { return document.getElementById('gameCanvas'); },
+      get ctx()    { return this.canvas.getContext('2d'); },
+      get video()  { return document.getElementById('video'); },
+
+      // ── Estado ──
+      started: false,
+      score: 0,
+      combo: 1,
+      maxCombo: 1,
+      lives: 3,
+      circles: [],
+      lastSpawn: 0,
+      spawnInterval: 900, // ms entre spawns (diminui com o score)
+      multiHandLandmarks: [],
+
+      // ── Configuração das colunas ──
+      cols: 4,
+      colColors: ['#f472b6', '#a78bfa', '#34d399', '#fb923c'],
+
+      // ── Zona de acerto (Y em pixels no canvas de 720px) ──
+      hitZoneY: 620,
+      hitZoneH: 60,
+
+      /** Inicializa botões e aguarda MediaPipe. */
+      init() {
+        document.getElementById('btnStart').onclick = () => this.start();
+        document.getElementById('btnRetry').onclick = () => this.start();
+        this.waitForMediaPipe();
+      },
+
+      waitForMediaPipe() {
+        const check = () => {
+          if (window.Hands && window.Camera) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('startContent').style.display = 'block';
+            this.setupHands();
+          } else { setTimeout(check, 200); }
+        };
+        check();
+      },
+
+      setupHands() {
+        const hands = new window.Hands({
+          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+        });
+        hands.setOptions({
+          maxNumHands: 2, modelComplexity: 1,
+          minDetectionConfidence: 0.6, minTrackingConfidence: 0.6,
+        });
+        hands.onResults((r) => this.onResults(r));
+
+        const cam = new window.Camera(this.video, {
+          onFrame: async () => { if (this.video && hands) await hands.send({ image: this.video }); },
+          width: 1280, height: 720,
+        });
+        cam.start();
+      },
+
+      start() {
+        this.score = 0; this.combo = 1; this.maxCombo = 1; this.lives = 3;
+        this.circles = []; this.lastSpawn = performance.now();
+        this.spawnInterval = 900;
+        this.started = true;
+        this.updateHud();
+        document.getElementById('overlayStart').classList.remove('visible');
+        document.getElementById('overlayEnd').classList.remove('visible');
+      },
+
+      updateHud() {
+        document.getElementById('scoreDisplay').textContent = this.score;
+        document.getElementById('comboDisplay').textContent = `×${this.combo}`;
+        document.getElementById('livesDisplay').textContent = '♥'.repeat(Math.max(0, this.lives));
+      },
+
+      endGame() {
+        this.started = false;
+        document.getElementById('finalScore').textContent = this.score;
+        document.getElementById('finalCombo').textContent = `×${this.maxCombo}`;
+        document.getElementById('overlayEnd').classList.add('visible');
+      },
+
+      /** Cria uma nova bolinha em coluna aleatória. */
+      spawnCircle() {
+        const now = performance.now();
+        // Intervalo diminui conforme pontuação aumenta (mínimo 400ms)
+        this.spawnInterval = Math.max(400, 900 - Math.floor(this.score / 50) * 30);
+        if (now - this.lastSpawn < this.spawnInterval) return;
+        this.lastSpawn = now;
+
+        const col = Math.floor(Math.random() * this.cols);
+        const w = this.canvas.width;
+        const colW = w / this.cols;
+        this.circles.push({
+          col,
+          x: colW * col + colW / 2,
+          y: -20,
+          r: 28,
+          speed: 4 + Math.floor(this.score / 100) * 0.5,
+          color: this.colColors[col],
+          hit: false,
+        });
+      },
+
+      /** Mostra feedback flutuante de acerto/erro. */
+      showFeedback(x, y, text, color) {
+        const el = document.createElement('div');
+        el.className = 'feedback';
+        el.textContent = text;
+        el.style.color = color;
+        el.style.left = `${x}px`;
+        el.style.top  = `${y}px`;
+        document.getElementById('mainStage').appendChild(el);
+        setTimeout(() => el.remove(), 800);
+      },
+
+      /** Callback principal do MediaPipe. */
+      onResults(results) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+
+        // Fundo: vídeo espelhado + escurecimento
+        ctx.save();
+        ctx.translate(w, 0); ctx.scale(-1, 1);
+        ctx.drawImage(results.image, 0, 0, w, h);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, 0, w, h);
+
+        this.multiHandLandmarks = results.multiHandLandmarks || [];
+
+        if (this.started) this.updateLogic(ctx, w, h);
+        else              this.drawScene(ctx, w, h);
+      },
+
+      /** Lógica de jogo por frame. */
+      updateLogic(ctx, w, h) {
+        this.spawnCircle();
+
+        // Coleta posições dos indicadores (landmark 8) de todas as mãos
+        const fingertips = [];
+        for (const lm of this.multiHandLandmarks) {
+          const tip = lm[8];
+          if (tip) fingertips.push({ x: (1 - tip.x) * w, y: tip.y * h });
+        }
+
+        const surviving = [];
+        for (const c of this.circles) {
+          c.y += c.speed;
+
+          // Verifica colisão com algum indicador
+          let hit = false;
+          for (const tip of fingertips) {
+            if (Math.hypot(tip.x - c.x, tip.y - c.y) < c.r + 20) {
+              hit = true; break;
+            }
+          }
+
+          if (hit && !c.hit) {
+            // Acerto: verifica se está na zona de acerto
+            const inZone = c.y > this.hitZoneY - this.hitZoneH && c.y < this.hitZoneY + this.hitZoneH;
+            if (inZone) {
+              this.score += 100 * this.combo;
+              this.combo = Math.min(this.combo + 1, 8);
+              this.maxCombo = Math.max(this.maxCombo, this.combo);
+              this.updateHud();
+              this.showFeedback(c.x - 30, this.hitZoneY - 80, 'PERFEITO!', '#34d399');
+              c.hit = true;
+            }
+          }
+
+          // Bolinha passou da zona sem ser tocada
+          if (c.y - c.r > h) {
+            if (!c.hit) {
+              this.lives--;
+              this.combo = 1;
+              this.updateHud();
+              this.showFeedback(c.x - 20, this.hitZoneY - 60, 'MISS', '#ef4444');
+              if (this.lives <= 0) { this.endGame(); return; }
+            }
+          } else {
+            surviving.push(c);
+          }
+        }
+        this.circles = surviving;
+        this.drawScene(ctx, w, h);
+      },
+
+      /** Desenha colunas, zona de acerto e bolinhas. */
+      drawScene(ctx, w, h) {
+        const colW = w / this.cols;
+
+        // Linhas divisórias das colunas
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < this.cols; i++) {
+          ctx.beginPath();
+          ctx.moveTo(colW * i, 0);
+          ctx.lineTo(colW * i, h);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Zona de acerto (linha horizontal colorida)
+        for (let col = 0; col < this.cols; col++) {
+          ctx.save();
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = this.colColors[col];
+          ctx.fillStyle = this.colColors[col] + '44';
+          ctx.fillRect(colW * col + 4, this.hitZoneY - this.hitZoneH / 2, colW - 8, this.hitZoneH);
+          ctx.strokeStyle = this.colColors[col];
+          ctx.lineWidth = 2;
+          ctx.strokeRect(colW * col + 4, this.hitZoneY - this.hitZoneH / 2, colW - 8, this.hitZoneH);
+          ctx.restore();
+        }
+
+        // Bolinhas
+        for (const c of this.circles) {
+          ctx.save();
+          ctx.shadowBlur = 25; ctx.shadowColor = c.color;
+          ctx.fillStyle = c.color;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Indicadores dos dedos
+        for (const lm of this.multiHandLandmarks) {
+          const tip = lm[8];
+          if (!tip) continue;
+          const tx = (1 - tip.x) * w, ty = tip.y * h;
+          ctx.save();
+          ctx.shadowBlur = 20; ctx.shadowColor = '#ffffff';
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(tx, ty, 12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      },
+    };
+
+    game.init();
+  </script>
+</body>
+</html>

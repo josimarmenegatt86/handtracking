@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<!--
+  bubbleshooter.html — Bubble Shooter standalone (HTML + CSS + JS + MediaPipe via CDN).
+  Aponte o indicador para mirar e feche o punho para atirar bolhas coloridas.
+  Não precisa de npm/Next.js para rodar.
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bubble Shooter — Hand Tracking | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera, detecção de mãos e utilitários de desenho -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    /* ── Área de jogo ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0;
+      overflow: hidden; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: #000;
+    }
+
+    /* HUD */
+    .hud {
+      position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; gap: 2rem;
+      padding: 0.6rem 2rem;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px;
+      font-family: monospace; font-size: 1.3rem; font-weight: 700;
+    }
+    .hud .score-val { color: #22d3ee; }
+    .hud .level-val { color: #fbbf24; }
+
+    /* Overlays */
+    .overlay {
+      position: absolute; inset: 0; z-index: 30;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.88); backdrop-filter: blur(12px);
+    }
+    .overlay.visible { display: flex; }
+    .modal {
+      padding: 2.5rem; border-radius: 1.5rem; text-align: center;
+      background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
+      max-width: 30rem; margin: 1rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .modal h1 {
+      font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; margin-bottom: 1rem;
+      background: linear-gradient(90deg, #22d3ee, #06b6d4, #0891b2);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .modal p { color: #d1d5db; margin-bottom: 0.6rem; line-height: 1.6; }
+    .modal .hint {
+      font-size: 0.85rem; color: #6b7280;
+      border-top: 1px solid #1f2937; padding-top: 1rem; margin-top: 1rem;
+    }
+    .btn-start {
+      margin-top: 1.5rem; padding: 0.9rem 2.5rem;
+      background: linear-gradient(90deg, #0891b2, #06b6d4);
+      color: #fff; font-weight: 700; font-size: 1.1rem;
+      border: none; border-radius: 9999px; cursor: pointer;
+      box-shadow: 0 0 20px rgba(8,145,178,0.5); letter-spacing: 0.08em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-start:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(6,182,212,0.7); }
+
+    #gameCanvas {
+      display: block; position: relative; z-index: 1;
+      max-width: 100%; max-height: 100%;
+    }
+
+    .footer-status {
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
+      color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão do projeto ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="../assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Bubble Shooter</span>
+      <span class="dev-role">Aponte o indicador para mirar. Feche o punho para atirar. Combine 3+ bolhas da mesma cor para explodir.</span>
+    </div>
+    <a class="dev-back-link" href="../index.html">← Início</a>
+  </header>
+
+  <!-- ── Área principal do jogo ── -->
+  <div class="main-stage" id="mainStage">
+
+    <!-- HUD -->
+    <div class="hud">
+      <span>SCORE <span class="score-val" id="scoreDisplay">0</span></span>
+      <span style="color:#555">|</span>
+      <span>NÍVEL <span class="level-val" id="levelDisplay">1</span></span>
+    </div>
+
+    <!-- Tela inicial -->
+    <div class="overlay visible" id="overlayStart">
+      <div class="modal">
+        <div id="loader" style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+          <div style="width:4rem;height:4rem;border:4px solid rgba(6,182,212,0.3);border-top-color:#22d3ee;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+          <p style="color:#22d3ee;font-family:monospace;letter-spacing:0.1em">INICIALIZANDO...</p>
+        </div>
+        <div id="startContent" style="display:none">
+          <h1>BUBBLE SHOOTER</h1>
+          <p>Aponte o <strong style="color:#22d3ee">indicador</strong> para mirar nas bolhas.</p>
+          <p>Feche o <strong style="color:#fbbf24">punho</strong> para atirar uma bolha.</p>
+          <p>Combine <strong style="color:#4ade80">3 ou mais</strong> bolhas da mesma cor para explodir.</p>
+          <p class="hint">Permita acesso à câmera · 1 mão</p>
+          <button class="btn-start" type="button" id="btnStart">INICIAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de vitória/derrota -->
+    <div class="overlay" id="overlayEnd">
+      <div class="modal">
+        <h1 id="endTitle">PARABÉNS!</h1>
+        <p>Pontuação: <strong id="finalScore" style="color:#22d3ee">0</strong></p>
+        <button class="btn-start" type="button" id="btnRetry">JOGAR DE NOVO</button>
+      </div>
+    </div>
+
+    <!-- Webcam oculta + canvas do jogo -->
+    <video id="video" playsinline hidden></video>
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <p class="footer-status">BUBBLE SHOOTER · ONLINE</p>
+  </div><!-- fim .main-stage -->
+
+  <script>
+    /**
+     * Bubble Shooter — atirador de bolhas controlado pela mão.
+     * O indicador define a mira; fechar o punho dispara uma bolha.
+     * Combinar 3+ bolhas da mesma cor as elimina e soma pontos.
+     */
+    const game = {
+      // ── Referências DOM ──
+      get canvas() { return document.getElementById('gameCanvas'); },
+      get ctx()    { return this.canvas.getContext('2d'); },
+      get video()  { return document.getElementById('video'); },
+
+      // ── Estado ──
+      started: false,
+      score: 0,
+      level: 1,
+      multiHandLandmarks: [],
+      multiHandedness: [],
+
+      // ── Grade de bolhas (topo da tela) ──
+      gridRows: 5,
+      gridCols: 12,
+      bubbleR: 28,
+      grid: [],          // grid[row][col] = { color } | null
+
+      // ── Bolha do atirador ──
+      shooter: { x: 640, y: 680, angle: -Math.PI / 2 },
+      currentBubble: null,   // bolha pronta para atirar
+      flyingBubble: null,    // bolha em voo
+
+      // ── Controle de disparo ──
+      wasFist: false,
+      shootCooldown: 0,
+
+      // ── Paleta de cores ──
+      colors: ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'],
+
+      /** Inicializa botões e aguarda MediaPipe. */
+      init() {
+        document.getElementById('btnStart').onclick = () => this.start();
+        document.getElementById('btnRetry').onclick = () => this.start();
+        this.waitForMediaPipe();
+      },
+
+      waitForMediaPipe() {
+        const check = () => {
+          if (window.Hands && window.Camera) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('startContent').style.display = 'block';
+            this.setupHands();
+          } else { setTimeout(check, 200); }
+        };
+        check();
+      },
+
+      setupHands() {
+        const hands = new window.Hands({
+          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+        });
+        hands.setOptions({
+          maxNumHands: 1, modelComplexity: 1,
+          minDetectionConfidence: 0.6, minTrackingConfidence: 0.6,
+        });
+        hands.onResults((r) => this.onResults(r));
+
+        const cam = new window.Camera(this.video, {
+          onFrame: async () => { if (this.video && hands) await hands.send({ image: this.video }); },
+          width: 1280, height: 720,
+        });
+        cam.start();
+      },
+
+      /** Reinicia o jogo e gera a grade inicial. */
+      start() {
+        this.score = 0; this.level = 1;
+        this.flyingBubble = null;
+        this.wasFist = false; this.shootCooldown = 0;
+        this.buildGrid();
+        this.nextBubble();
+        this.started = true;
+        this.updateHud();
+        document.getElementById('overlayStart').classList.remove('visible');
+        document.getElementById('overlayEnd').classList.remove('visible');
+      },
+
+      updateHud() {
+        document.getElementById('scoreDisplay').textContent = this.score;
+        document.getElementById('levelDisplay').textContent = this.level;
+      },
+
+      /** Gera a grade de bolhas coloridas. */
+      buildGrid() {
+        this.grid = [];
+        const colorsUsed = this.colors.slice(0, Math.min(3 + this.level, this.colors.length));
+        for (let r = 0; r < this.gridRows; r++) {
+          this.grid[r] = [];
+          for (let c = 0; c < this.gridCols; c++) {
+            // Offset em linhas pares para padrão hexagonal
+            this.grid[r][c] = { color: colorsUsed[Math.floor(Math.random() * colorsUsed.length)] };
+          }
+        }
+      },
+
+      /** Prepara a próxima bolha para atirar. */
+      nextBubble() {
+        const colorsUsed = this.colors.slice(0, Math.min(3 + this.level, this.colors.length));
+        this.currentBubble = { color: colorsUsed[Math.floor(Math.random() * colorsUsed.length)] };
+      },
+
+      /** Converte posição da grade para pixel no canvas. */
+      gridToPixel(row, col) {
+        const r = this.bubbleR;
+        const offsetX = (row % 2 === 0) ? 0 : r; // offset hexagonal
+        const x = col * r * 2 + r + offsetX + (this.canvas.width - this.gridCols * r * 2) / 2;
+        const y = row * r * 1.75 + r + 60;
+        return { x, y };
+      },
+
+      /** Converte pixel para posição aproximada na grade. */
+      pixelToGrid(px, py) {
+        const r = this.bubbleR;
+        const row = Math.round((py - r - 60) / (r * 1.75));
+        const offsetX = (row % 2 === 0) ? 0 : r;
+        const col = Math.round((px - r - offsetX - (this.canvas.width - this.gridCols * r * 2) / 2) / (r * 2));
+        return { row: Math.max(0, row), col: Math.max(0, Math.min(this.gridCols - 1, col)) };
+      },
+
+      /** Detecta se a mão está fechada em punho. */
+      isFist(landmarks) {
+        const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+        const wrist = landmarks[0];
+        let closed = 0;
+        for (let i = 0; i < tips.length; i++) {
+          const dTip = Math.hypot(landmarks[tips[i]].x - wrist.x, landmarks[tips[i]].y - wrist.y);
+          const dPip = Math.hypot(landmarks[pips[i]].x - wrist.x, landmarks[pips[i]].y - wrist.y);
+          if (dTip < dPip) closed++;
+        }
+        return closed >= 3;
+      },
+
+      /** Busca em flood-fill todas as bolhas conectadas da mesma cor. */
+      findGroup(row, col, color, visited = new Set()) {
+        const key = `${row},${col}`;
+        if (visited.has(key)) return [];
+        if (row < 0 || row >= this.gridRows || col < 0 || col >= this.gridCols) return [];
+        const cell = this.grid[row]?.[col];
+        if (!cell || cell.color !== color) return [];
+        visited.add(key);
+        const group = [{ row, col }];
+        // Vizinhos hexagonais
+        const neighbors = this.getNeighbors(row, col);
+        for (const n of neighbors) group.push(...this.findGroup(n.row, n.col, color, visited));
+        return group;
+      },
+
+      /** Retorna os vizinhos hexagonais de uma célula. */
+      getNeighbors(row, col) {
+        const even = row % 2 === 0;
+        return [
+          { row: row - 1, col: even ? col - 1 : col },
+          { row: row - 1, col: even ? col     : col + 1 },
+          { row: row,     col: col - 1 },
+          { row: row,     col: col + 1 },
+          { row: row + 1, col: even ? col - 1 : col },
+          { row: row + 1, col: even ? col     : col + 1 },
+        ];
+      },
+
+      /** Verifica se a grade está vazia (vitória). */
+      isGridEmpty() {
+        return this.grid.every(row => row.every(cell => cell === null));
+      },
+
+      /** Callback principal do MediaPipe. */
+      onResults(results) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+
+        // Fundo: vídeo espelhado + escurecimento
+        ctx.save();
+        ctx.translate(w, 0); ctx.scale(-1, 1);
+        ctx.drawImage(results.image, 0, 0, w, h);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, w, h);
+
+        this.multiHandLandmarks = results.multiHandLandmarks || [];
+
+        if (this.started) this.updateLogic(ctx, w, h);
+        else              this.drawScene(ctx, w, h);
+      },
+
+      /** Lógica de jogo por frame. */
+      updateLogic(ctx, w, h) {
+        if (this.shootCooldown > 0) this.shootCooldown--;
+
+        if (this.multiHandLandmarks.length > 0) {
+          const lm = this.multiHandLandmarks[0];
+          // Ponta do indicador define a mira
+          const tip = lm[8];
+          const tx = (1 - tip.x) * w;
+          const ty = tip.y * h;
+          // Ângulo do atirador em direção ao indicador
+          this.shooter.angle = Math.atan2(ty - this.shooter.y, tx - this.shooter.x);
+
+          // Disparo ao fechar o punho
+          const fist = this.isFist(lm);
+          if (fist && !this.wasFist && !this.flyingBubble && this.shootCooldown === 0) {
+            this.flyingBubble = {
+              x: this.shooter.x, y: this.shooter.y,
+              vx: Math.cos(this.shooter.angle) * 14,
+              vy: Math.sin(this.shooter.angle) * 14,
+              color: this.currentBubble.color,
+              r: this.bubbleR,
+            };
+            this.nextBubble();
+            this.shootCooldown = 20;
+          }
+          this.wasFist = fist;
+        }
+
+        // Move a bolha em voo
+        if (this.flyingBubble) {
+          const fb = this.flyingBubble;
+          fb.x += fb.vx; fb.y += fb.vy;
+
+          // Rebate nas paredes laterais
+          if (fb.x - fb.r < 0)  { fb.x = fb.r;     fb.vx *= -1; }
+          if (fb.x + fb.r > w)  { fb.x = w - fb.r; fb.vx *= -1; }
+
+          // Saiu pela parte de cima (sem colidir)
+          if (fb.y - fb.r < 0) {
+            this.placeBubble(fb, 0, Math.round((fb.x - (w - this.gridCols * this.bubbleR * 2) / 2 - this.bubbleR) / (this.bubbleR * 2)));
+            this.flyingBubble = null;
+          }
+
+          // Colisão com bolhas da grade
+          let placed = false;
+          outer: for (let r = 0; r < this.gridRows; r++) {
+            for (let c = 0; c < this.gridCols; c++) {
+              if (!this.grid[r]?.[c]) continue;
+              const pos = this.gridToPixel(r, c);
+              if (Math.hypot(fb.x - pos.x, fb.y - pos.y) < fb.r * 1.9) {
+                // Encontra célula vazia adjacente para encaixar
+                const neighbors = this.getNeighbors(r, c);
+                for (const n of neighbors) {
+                  if (n.row >= 0 && n.row < this.gridRows && n.col >= 0 && n.col < this.gridCols && !this.grid[n.row]?.[n.col]) {
+                    this.placeBubble(fb, n.row, n.col);
+                    placed = true; break outer;
+                  }
+                }
+                // Se não achou vizinho vazio, coloca na posição mais próxima
+                const gp = this.pixelToGrid(fb.x, fb.y);
+                this.placeBubble(fb, gp.row, gp.col);
+                placed = true; break outer;
+              }
+            }
+          }
+          if (placed) this.flyingBubble = null;
+        }
+
+        this.drawScene(ctx, w, h);
+      },
+
+      /** Encaixa a bolha na grade e verifica combinações. */
+      placeBubble(fb, row, col) {
+        row = Math.max(0, Math.min(this.gridRows - 1, row));
+        col = Math.max(0, Math.min(this.gridCols - 1, col));
+        if (!this.grid[row]) this.grid[row] = [];
+        this.grid[row][col] = { color: fb.color };
+
+        // Verifica grupo de 3+ bolhas da mesma cor
+        const group = this.findGroup(row, col, fb.color);
+        if (group.length >= 3) {
+          for (const { row: gr, col: gc } of group) {
+            this.grid[gr][gc] = null;
+          }
+          this.score += group.length * 10 * this.level;
+          this.updateHud();
+        }
+
+        // Verifica vitória
+        if (this.isGridEmpty()) {
+          this.level++;
+          this.buildGrid();
+          this.updateHud();
+        }
+      },
+
+      /** Desenha a grade, o atirador e a bolha em voo. */
+      drawScene(ctx, w, h) {
+        // Desenha bolhas da grade
+        for (let r = 0; r < this.gridRows; r++) {
+          for (let c = 0; c < this.gridCols; c++) {
+            const cell = this.grid[r]?.[c];
+            if (!cell) continue;
+            const pos = this.gridToPixel(r, c);
+            this.drawBubble(ctx, pos.x, pos.y, this.bubbleR, cell.color);
+          }
+        }
+
+        // Linha de mira
+        if (this.multiHandLandmarks.length > 0) {
+          ctx.save();
+          ctx.setLineDash([10, 10]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(this.shooter.x, this.shooter.y);
+          ctx.lineTo(
+            this.shooter.x + Math.cos(this.shooter.angle) * 300,
+            this.shooter.y + Math.sin(this.shooter.angle) * 300
+          );
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // Próxima bolha (atirador)
+        if (this.currentBubble) {
+          this.drawBubble(ctx, this.shooter.x, this.shooter.y, this.bubbleR, this.currentBubble.color);
+        }
+
+        // Bolha em voo
+        if (this.flyingBubble) {
+          const fb = this.flyingBubble;
+          this.drawBubble(ctx, fb.x, fb.y, fb.r, fb.color);
+        }
+
+        // Indicador do dedo
+        for (const lm of this.multiHandLandmarks) {
+          const tip = lm[8];
+          if (!tip) continue;
+          const tx = (1 - tip.x) * w, ty = tip.y * h;
+          ctx.save();
+          ctx.shadowBlur = 20; ctx.shadowColor = '#fff';
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(tx, ty, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      },
+
+      /** Desenha uma bolha com brilho. */
+      drawBubble(ctx, x, y, r, color) {
+        ctx.save();
+        ctx.shadowBlur = 20; ctx.shadowColor = color;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        // Reflexo branco no topo
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      },
+    };
+
+    game.init();
+  </script>
+</body>
+</html>

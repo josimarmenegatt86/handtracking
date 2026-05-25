@@ -1,44 +1,93 @@
 <!DOCTYPE html>
 <!--
-  index.html — Versão standalone do Hand Slicer (LOGICA - SENAI) para GitHub Pages.
-  Um único arquivo: HTML + CSS + JavaScript + MediaPipe via CDN.
-  Não precisa de npm/Next.js para rodar.
+  fatiadormanual.html — Hand Slicer standalone (HTML + CSS + JS + MediaPipe via CDN).
+  Corte as bolinhas verdes com o dedo indicador; evite as vermelhas.
 -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Logica - SENAI</title>
+  <title>Fatiador de Bolinhas — Hand Tracking | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera, detecção de mãos e utilitários de desenho -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Layout principal: cabeçalho fixo + área de jogo flexível */
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
       background: #0a0a0a;
       color: #e5e5e5;
-      min-height: 100dvh;
+      height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding-top: 5rem;
     }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    /* ── Área de jogo (ocupa o restante da altura) ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0;
+      overflow: hidden; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    /* ── Fundo cyberpunk (grade + brilho) ── */
     .grid-bg {
-      position: fixed; inset: 0; z-index: 0; opacity: 0.2; pointer-events: none;
+      position: absolute; inset: 0; z-index: 0; opacity: 0.2; pointer-events: none;
       background-image:
         linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px);
       background-size: 40px 40px;
     }
     .glow {
-      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
       width: 600px; height: 300px;
       background: rgba(6,182,212,0.2); filter: blur(100px);
       border-radius: 50%; pointer-events: none; z-index: 0;
     }
     main { position: relative; z-index: 1; }
+
+    /* ── HUD: pontuação e vidas ── */
+    /* ── HUD posicionado dentro da .main-stage ── */
     .hud {
-      position: fixed; top: 1.5rem; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
       z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
     }
     .buff-label {
@@ -58,8 +107,9 @@
     .hud-panel .score-val { color: #22d3ee; }
     .hud-panel.buff .score-val { color: #facc15; }
     .hud-panel .lives-val { color: #ef4444; }
+    /* ── Overlays (tela inicial e game over) ── */
     .overlay {
-      position: fixed; inset: 0; z-index: 30;
+      position: absolute; inset: 0; z-index: 30;
       display: none; flex-direction: column; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.9); backdrop-filter: blur(12px);
     }
@@ -130,36 +180,36 @@
       width: auto; height: auto;
     }
     .footer-status {
-      position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
       color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
     }
-    /* Logo SENAI — canto superior e tela inicial */
-    .logo-senai {
-      position: fixed; top: 1rem; left: 1rem; z-index: 40;
-      pointer-events: none;
-      filter: drop-shadow(0 2px 12px rgba(0, 61, 165, 0.6));
-      border-radius: 6px;
-    }
+    /* Logo SENAI removida do canto — substituída pelo cabeçalho padrão */
     .logo-senai--modal {
-      position: static;
-      display: block;
-      margin: 0 auto 1.25rem;
-      width: 180px;
-      height: auto;
+      position: static; display: block;
+      margin: 0 auto 1.25rem; width: 180px; height: auto;
     }
   </style>
 </head>
 <body>
-  <!-- Fundo cyberpunk (grade + brilho) -->
-  <div class="grid-bg"></div>
-  <div class="glow"></div>
 
-  <!-- Logo SENAI (SVG embutido — troque por <img src="senai-logo.png"> se tiver o arquivo oficial) -->
-  <svg class="logo-senai" width="140" height="41" viewBox="0 0 220 64" role="img" aria-label="SENAI">
-    <rect width="220" height="64" rx="6" fill="#003DA5"/>
-    <rect x="8" y="8" width="48" height="48" rx="4" fill="#ffffff" fill-opacity="0.12"/>
-    <text x="118" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="2">SENAI</text>
-  </svg>
+  <!-- ── Cabeçalho padrão do projeto ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="../assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Fatiador de Bolinhas</span>
+      <span class="dev-role">Corte as bolinhas verdes com o indicador. Evite as vermelhas. Buff dourado: 2× pontos por 10s.</span>
+    </div>
+    <a class="dev-back-link" href="../index.html">← Início</a>
+  </header>
+
+  <!-- ── Área principal do jogo ── -->
+  <div class="main-stage">
+
+    <!-- Fundo cyberpunk -->
+    <div class="grid-bg"></div>
+    <div class="glow"></div>
 
   <!-- HUD: pontuação e vidas -->
   <div class="hud">
@@ -203,21 +253,16 @@
   </div>
 
   <!-- Webcam (oculta) + canvas onde o jogo é desenhado -->
-  <main>
     <video id="video" playsinline hidden></video>
     <div class="canvas-wrap" id="canvasWrap">
       <div class="canvas-inner">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
       </div>
     </div>
-  </main>
 
-  <p class="footer-status">LOGICA - SENAI · ONLINE</p>
+  <p class="footer-status">FATIADOR DE BOLINHAS · ONLINE</p>
 
-  <!-- Bibliotecas de rastreamento de mãos (Google MediaPipe) -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  </div><!-- fim .main-stage -->
 
   <script>
     /**
