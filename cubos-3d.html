@@ -78,13 +78,16 @@
       renderer.setSize(w, h);
     }
 
+    /** Processa resultados do MediaPipe: detecta punho e posição do indicador */
     function onResults(results) {
       loadingDiv.style.display = 'none';
       if (results.multiHandLandmarks?.length) {
         const lm = results.multiHandLandmarks[0];
         let total = 0;
+        // Soma distâncias das pontas dos dedos ao pulso para detectar punho
         [8, 12, 16, 20].forEach((id) => { total += Math.hypot(lm[id].x - lm[0].x, lm[id].y - lm[0].y); });
-        isFist = total < 0.6;
+        isFist = total < 0.6; // Punho fechado se soma for pequena
+        // Converte coordenadas normalizadas para espaço 3D (espelhado)
         handX = (1 - lm[8].x - 0.5) * 22;
         handY = (0.5 - lm[8].y) * 16;
       } else { handX = handY = -100; isFist = false; }

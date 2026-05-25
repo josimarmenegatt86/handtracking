@@ -52,7 +52,7 @@
         const videoCanvas = document.getElementById('video-canvas');
         const videoCtx = videoCanvas.getContext('2d');
 
-        // --- YÜKSƏK KEYFİYYƏTLİ DÜNYA DATA ANALİZİ ---
+        // --- ANÁLISE DE DADOS DO MAPA-MÚNDI EM ALTA QUALIDADE ---
         const mapCanvas = document.createElement('canvas');
         const mapCtx = mapCanvas.getContext('2d');
         const mapImg = new Image();
@@ -67,7 +67,7 @@
             mapData = mapCtx.getImageData(0, 0, 1024, 512).data;
         };
 
-        // --- THREE.JS QURULUMU ---
+        // --- CONFIGURAÇÃO DO THREE.JS ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, stageEl.clientWidth / stageEl.clientHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ 
@@ -203,7 +203,7 @@
             videoCtx.scale(-1, 1);
             videoCtx.translate(-videoCanvas.width, 0);
             
-            // Kamera görüntüsünü mərkəzləşdirib düzgün miqyasda çəkmək (Object-fit: cover məntiqi)
+        // Centraliza e escala a imagem da câmera (lógica de object-fit: cover)
             const videoRatio = results.image.width / results.image.height;
             const canvasRatio = videoCanvas.width / videoCanvas.height;
             let drawWidth, drawHeight, offsetX, offsetY;

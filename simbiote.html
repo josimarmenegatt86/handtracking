@@ -144,22 +144,26 @@
       camera.position.z = 55;
     }
 
+    /** Loop de animação: atualiza cor, tamanho e posição das partículas conforme estado */
     function animate() {
       requestAnimationFrame(animate);
       const time = Date.now() * 0.002;
       const posAttr = geometry.attributes.position.array;
 
+      // Estado de explosão: partículas se expandem em vermelho
       if (isExploded) {
         material.color.lerp(new THREE.Color(0xff1100), 0.25);
         material.size = THREE.MathUtils.lerp(material.size, 1.2, 0.15);
         currentNoise = THREE.MathUtils.lerp(currentNoise, 100, 0.2);
         camera.position.x = (Math.random() - 0.5) * 2.5;
         camera.position.y = (Math.random() - 0.5) * 2.5;
+      // Estado de corrupção (mão esquerda): partículas ficam roxas e agitadas
       } else if (isCorrupted) {
         material.color.lerp(new THREE.Color(0x9d00ff), 0.15);
         material.size = THREE.MathUtils.lerp(material.size, 0.5, 0.1);
         currentNoise = THREE.MathUtils.lerp(currentNoise, 20, 0.08);
         camera.position.set(0, 0, 55);
+      // Estado normal: partículas retornam ao azul ciano
       } else {
         material.color.lerp(new THREE.Color(0x00d4ff), 0.1);
         material.size = THREE.MathUtils.lerp(material.size, 0.3, 0.1);

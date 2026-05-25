@@ -99,9 +99,10 @@
       return { w: stageEl.clientWidth, h: stageEl.clientHeight };
     }
 
+    /** Inicializa o teclado QWERTY posicionando cada tecla na tela */
     function initKeyboard() {
       const { w: screenWidth, h: screenHeight } = stageSize();
-      keyObjects.length = 0;
+      keyObjects.length = 0; // Limpa teclas anteriores ao redimensionar
       const keyWidth = Math.min(screenWidth / 13, 70);
       const keyHeight = keyWidth;
       const padding = keyWidth * 0.2;
@@ -203,6 +204,7 @@
       });
     }
 
+    /** Verifica se o indicador está sobre uma tecla e se há pinça para pressionar */
     function checkInteraction(x, y, isPinching) {
       keyObjects.forEach((key) => {
         const isOver = x > key.x && x < key.x + key.w && y > key.y && y < key.y + key.h;

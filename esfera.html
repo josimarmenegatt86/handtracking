@@ -145,12 +145,13 @@
       renderer.setSize(w, h);
     }
 
+    /** Inicializa cena Three.js, câmera, renderer e cria a esfera de partículas */
     function init() {
       scene = new THREE.Scene();
       const w = stageEl.clientWidth;
       const h = stageEl.clientHeight;
       camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
-      camera.position.z = 8;
+      camera.position.z = 8; // Distância inicial da câmera
 
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(w, h);
@@ -291,6 +292,7 @@
       });
     }
 
+    /** Calcula distância 2D entre dois landmarks normalizados */
     function getDist(p1, p2) {
       return Math.hypot(p1.x - p2.x, p1.y - p2.y);
     }

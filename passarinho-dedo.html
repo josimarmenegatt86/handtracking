@@ -366,11 +366,11 @@
         }
 
         function draw() {
-            // Arxa plan tam qara
+            // Fundo totalmente preto
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Maneələr
+        // Obstáculos
             obstacles.forEach(obs => {
                 ctx.fillStyle = '#10b981';
                 ctx.fillRect(obs.x, 0, obs.width, obs.topHeight);
@@ -380,7 +380,7 @@
                 ctx.fillRect(obs.x - 5, obs.bottomY, obs.width + 10, 20);
             });
 
-            // Bonuslar
+            // Bônus
             bonuses.forEach(bonus => {
                 ctx.save();
                 ctx.shadowBlur = 15;
@@ -397,17 +397,17 @@
                 ctx.restore();
             });
 
-            // Skelet çəkmə (Düzəliş edildi)
+            // Desenho do esqueleto (corrigido)
             if (currentHandLandmarks) {
                 ctx.save();
-                // Medianın koordinatlarını güzgü əksi etməliyik çünki kamera tərs gəlir
+                // Precisamos espelhar as coordenadas pois a câmera vem invertida
                 const mirroredLandmarks = currentHandLandmarks.map(l => ({ 
                     x: (1 - l.x) * canvas.width, 
                     y: l.y * canvas.height 
                 }));
 
-                // Sümükləri çək
-                ctx.strokeStyle = '#00d4ff'; // Neon göy
+                // Desenha os ossos
+                ctx.strokeStyle = '#00d4ff'; // Neon ciano
                 ctx.lineWidth = 3;
                 ctx.lineCap = 'round';
                 ctx.shadowBlur = 10;
@@ -420,7 +420,7 @@
                     ctx.stroke();
                 });
 
-                // Oynaqları (nöqtələri) çək
+                // Desenha as articulações (pontos)
                 ctx.fillStyle = '#ffffff';
                 mirroredLandmarks.forEach(point => {
                     ctx.beginPath();
@@ -430,7 +430,7 @@
                 ctx.restore();
             }
 
-            // Quş
+            // Pássaro
             if (isGameStarted || isGameOver) {
                 ctx.save();
                 ctx.translate(bird.x, bird.y);
@@ -451,7 +451,7 @@
                 ctx.stroke();
                 drawWing(ctx, -2, 2, 14, bird.wingPhase, isDoublePoints ? '#fbbf24' : '#f59e0b');
 
-                // Göz
+                // Olho
                 ctx.fillStyle = 'white';
                 ctx.beginPath(); ctx.arc(8, -5, 5, 0, Math.PI * 2); ctx.fill();
                 if (bird.eyeBlink === 0) {

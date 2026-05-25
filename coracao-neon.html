@@ -113,7 +113,7 @@
         let isHeartVisible = false;
         let isFist = false;
         
-        const PARTICLE_COUNT = 1800; // Sürət üçün cüzi azaldıldı, lakin parlaqlıq artırıldı
+        const PARTICLE_COUNT = 1800; // Levemente reduzido para desempenho, mas brilho aumentado
         const HEART_SCALE = 12;
 
         function setupCanvas() {
@@ -151,7 +151,7 @@
                     isExploding: false,
                     life: 1.0,
                     ease: 0.02 + Math.random() * 0.04,
-                    // Parlaqlıq üçün rəng tonları
+                    // Tons de cor para brilho
                     color: i % 3 === 0 ? '#ff0044' : (i % 3 === 1 ? '#ff4d79' : '#ffffff')
                 });
             }
@@ -198,7 +198,7 @@
 
         function drawSkeleton(landmarks) {
             canvasCtx.save();
-            // Skelet üçün neon effekt
+            // Efeito neon para o esqueleto
             canvasCtx.shadowBlur = 10;
             canvasCtx.shadowColor = '#ff0044';
             canvasCtx.strokeStyle = '#ff3366';
@@ -232,7 +232,7 @@
             const cx = canvasElement.width / 2;
             const cy = canvasElement.height / 2;
 
-            // Parlaqlıq sirri: Additive blending
+        // Segredo do brilho: Additive blending
             canvasCtx.globalCompositeOperation = 'lighter';
 
             for (let i = 0; i < heartParticles.length; i++) {
@@ -266,7 +266,7 @@
                         dy += (p.y - cy) * (pulse * 0.012);
                     }
                     
-                    // İkiqat çəkim effekti: daha parlaq mərkəz
+                    // Efeito de dupla camada: centro mais brilhante
                     canvasCtx.fillRect(dx, dy, p.size, p.size);
                     if (p.opacity > 0.5 && i % 4 === 0) {
                         canvasCtx.fillStyle = '#ffffff';

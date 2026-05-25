@@ -123,6 +123,10 @@
       canvasElement.height = stageEl.clientHeight;
     }
 
+    /**
+     * Desenha um raio elétrico realista com desvios aleatórios entre dois pontos.
+     * @param {number} intensity - amplitude máxima dos desvios laterais
+     */
     function drawRealisticLightning(ctx, x1, y1, x2, y2, intensity) {
       const distance = Math.hypot(x2 - x1, y2 - y1);
       const segments = Math.max(5, Math.floor(distance / 10));
@@ -142,6 +146,11 @@
       return Math.hypot(p1.x - p2.x, p1.y - p2.y);
     }
 
+    /**
+     * Detecta se a mão está fechada em punho.
+     * Compara a posição Y das pontas dos dedos com as articulações intermediárias.
+     * @returns {boolean} true se 3 ou mais dedos estiverem dobrados
+     */
     function isFist(hand) {
       const tips = [8, 12, 16, 20];
       const joints = [6, 10, 14, 18];

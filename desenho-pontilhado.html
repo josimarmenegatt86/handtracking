@@ -59,7 +59,7 @@
     <video id="input-video" style="display:none;"></video>
 
     <script>
-        // --- THREE.JS QURULUMU ---
+        // --- CONFIGURAÇÃO DO THREE.JS ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -83,7 +83,7 @@
 
         let isClearing = false;
 
-        // Skelet üçün materiallar (Neon firuzəyi)
+        // Materiais para o esqueleto (Ciano neon)
         const jointMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.6 });
         const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.2 });
 
@@ -117,7 +117,7 @@
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        // Burada maxNumHands: 1 qoyaraq yalnız bir əli (adətən ilk tapılanı) izləyirik
+        // Aqui definimos maxNumHands: 1 para rastrear apenas uma mão (geralmente a primeira encontrada)
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
@@ -126,9 +126,9 @@
         });
 
         hands.onResults((results) => {
-            // Əgər əl tapılıbsa və bu yalnız bir əldirsə (və ya siyahıda birincidirsə)
+            // Se uma mão foi encontrada e é a única (ou a primeira da lista)
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // Yalnız birinci əli emal edirik, digərləri tamamilə yox sayılır
+                // Processamos apenas a primeira mão, as demais são completamente ignoradas
                 const landmarks = results.multiHandLandmarks[0];
 
                 const visibleWidth = Math.tan(camera.fov * Math.PI / 360) * camera.position.z * 2 * camera.aspect;
@@ -148,7 +148,7 @@
                 const thumbTip = joints[4].position;
                 const indexTip = joints[8].position;
 
-                // 3 barmaq jesti ilə silmə
+                // Gesto de 3 dedos para apagar
                 const isIndexOpen = joints[8].position.y > joints[6].position.y;
                 const isMiddleOpen = joints[12].position.y > joints[10].position.y;
                 const isRingOpen = joints[16].position.y > joints[14].position.y;
@@ -173,7 +173,7 @@
                 
                 handGroup.visible = true;
             } else {
-                // Əgər heç bir əl kadrda deyilsə, skeleti gizlə
+                // Se nenhuma mão estiver no quadro, oculta o esqueleto
                 cursor.position.set(100, 100, 0);
                 handGroup.visible = false;
             }

@@ -175,6 +175,7 @@
     const particleSystem = new THREE.Points(particles, pMaterial);
     scene.add(particleSystem);
 
+    /** Define posições alvo das partículas na forma de coração (equação paramétrica) */
     function setHeartShape() {
       for (let i = 0; i < particleCount; i++) {
         const r = Math.pow(Math.random(), 0.5);
@@ -189,6 +190,7 @@
       }
     }
 
+    /** Define posições alvo das partículas na forma de estrela de 5 pontas */
     function setStarShape() {
       for (let i = 0; i < particleCount; i++) {
         const r = Math.pow(Math.random(), 0.5) * 2.5;
@@ -200,6 +202,7 @@
       }
     }
 
+    /** Define posições alvo das partículas distribuídas em esfera 3D */
     function setCircleShape() {
       for (let i = 0; i < particleCount; i++) {
         const r = Math.pow(Math.random(), 0.3) * 2.2;

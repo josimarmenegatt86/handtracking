@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<!--
+  index.html — Versão standalone do Hand Slicer (LOGICA - SENAI) para GitHub Pages.
+  Um único arquivo: HTML + CSS + JavaScript + MediaPipe via CDN.
+  Não precisa de npm/Next.js para rodar.
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logica - SENAI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      min-height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding-top: 5rem;
+    }
+    .grid-bg {
+      position: fixed; inset: 0; z-index: 0; opacity: 0.2; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .glow {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 300px;
+      background: rgba(6,182,212,0.2); filter: blur(100px);
+      border-radius: 50%; pointer-events: none; z-index: 0;
+    }
+    main { position: relative; z-index: 1; }
+    .hud {
+      position: fixed; top: 1.5rem; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+    }
+    .buff-label {
+      font-size: 2rem; font-weight: 900; color: #facc15;
+      text-shadow: 0 0 15px rgba(234,179,8,0.8);
+      display: none;
+    }
+    .buff-label.active { display: block; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.7; } }
+    .hud-panel {
+      display: flex; gap: 1.5rem; padding: 0.75rem 2rem;
+      background: rgba(0,0,0,0.4); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px;
+    }
+    .hud-panel.buff { border-color: rgba(234,179,8,0.5); background: rgba(120,53,15,0.4); }
+    .hud-panel span.val { font-family: monospace; font-size: 1.5rem; font-weight: 700; }
+    .hud-panel .score-val { color: #22d3ee; }
+    .hud-panel.buff .score-val { color: #facc15; }
+    .hud-panel .lives-val { color: #ef4444; }
+    .overlay {
+      position: fixed; inset: 0; z-index: 30;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.9); backdrop-filter: blur(12px);
+    }
+    .overlay.visible { display: flex; }
+    .modal {
+      padding: 2.5rem; border-radius: 1.5rem; text-align: center;
+      background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
+      max-width: 28rem; margin: 1rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .modal h1.title {
+      font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 900;
+      background: linear-gradient(90deg, #22d3ee, #3b82f6, #9333ea);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      margin-bottom: 1.5rem;
+    }
+    .modal.game-over h1 {
+      background: linear-gradient(180deg, #ef4444, #7f1d1d);
+      -webkit-background-clip: text; background-clip: text;
+    }
+    .modal p { color: #d1d5db; margin-bottom: 0.75rem; line-height: 1.6; }
+    .modal .hint {
+      font-size: 0.85rem; color: #6b7280;
+      border-top: 1px solid #1f2937; padding-top: 1rem; margin-top: 1rem;
+    }
+    .btn-start {
+      margin-top: 1.5rem; padding: 1rem 2.5rem;
+      background: linear-gradient(90deg, #0891b2, #06b6d4);
+      color: #fff; font-weight: 700; font-size: 1.25rem;
+      border: none; border-radius: 9999px; cursor: pointer;
+      box-shadow: 0 0 20px rgba(8,145,178,0.5);
+      letter-spacing: 0.1em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-start:hover {
+      background: #06b6d4;
+      box-shadow: 0 0 40px rgba(6,182,212,0.7);
+      transform: scale(1.05);
+    }
+    .btn-retry {
+      padding: 1rem 3rem; background: linear-gradient(90deg, #dc2626, #991b1b);
+      color: #fff; font-weight: 700; font-size: 1.25rem;
+      border: none; border-radius: 0.75rem; cursor: pointer; margin-top: 1rem;
+    }
+    .btn-retry:hover { filter: brightness(1.2); }
+    .loader { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+    .spinner { width: 6rem; height: 6rem; position: relative; }
+    .spinner::before, .spinner::after {
+      content: ""; position: absolute; inset: 0;
+      border: 4px solid transparent; border-radius: 50%;
+    }
+    .spinner::before { border-color: rgba(6,182,212,0.3); animation: ping 1.5s infinite; }
+    .spinner::after { border-color: #22d3ee; border-top-color: transparent; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes ping { 75%, 100% { transform: scale(1.3); opacity: 0; } }
+    .canvas-wrap {
+      position: relative; padding: 2px; border-radius: 1.5rem;
+      background: linear-gradient(135deg, #06b6d4, #9333ea, #06b6d4);
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .canvas-wrap.buff-border { background: linear-gradient(135deg, #8b5cf6, #facc15, #8b5cf6); }
+    .canvas-inner {
+      border-radius: 1.25rem; overflow: hidden;
+      background: #000; border: 4px solid #111;
+    }
+    #gameCanvas {
+      display: block; max-width: 90vw; max-height: calc(100dvh - 8rem);
+      width: auto; height: auto;
+    }
+    .footer-status {
+      position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
+    }
+    /* Logo SENAI — canto superior e tela inicial */
+    .logo-senai {
+      position: fixed; top: 1rem; left: 1rem; z-index: 40;
+      pointer-events: none;
+      filter: drop-shadow(0 2px 12px rgba(0, 61, 165, 0.6));
+      border-radius: 6px;
+    }
+    .logo-senai--modal {
+      position: static;
+      display: block;
+      margin: 0 auto 1.25rem;
+      width: 180px;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <!-- Fundo cyberpunk (grade + brilho) -->
+  <div class="grid-bg"></div>
+  <div class="glow"></div>
+
+  <!-- Logo SENAI (SVG embutido — troque por <img src="senai-logo.png"> se tiver o arquivo oficial) -->
+  <svg class="logo-senai" width="140" height="41" viewBox="0 0 220 64" role="img" aria-label="SENAI">
+    <rect width="220" height="64" rx="6" fill="#003DA5"/>
+    <rect x="8" y="8" width="48" height="48" rx="4" fill="#ffffff" fill-opacity="0.12"/>
+    <text x="118" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="2">SENAI</text>
+  </svg>
+
+  <!-- HUD: pontuação e vidas -->
+  <div class="hud">
+    <div class="buff-label" id="buffLabel">BUFF: <span id="buffTime">0</span>s</div>
+    <div class="hud-panel" id="hudPanel">
+      <div>SCORE <span class="val score-val" id="scoreDisplay">0</span></div>
+      <div style="width:1px;height:2rem;background:rgba(255,255,255,0.2)"></div>
+      <div>LIVES <span class="val lives-val" id="livesDisplay">♥♥♥♥♥</span></div>
+    </div>
+  </div>
+
+  <!-- Tela inicial / carregamento MediaPipe -->
+  <div class="overlay visible" id="overlayStart">
+    <div class="modal">
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <p style="color:#22d3ee;font-family:monospace;letter-spacing:0.15em">INICIALIZANDO SISTEMAS...</p>
+      </div>
+      <div id="startContent" style="display:none">
+        <svg class="logo-senai logo-senai--modal" viewBox="0 0 220 64" role="img" aria-label="SENAI">
+          <rect width="220" height="64" rx="6" fill="#003DA5"/>
+          <rect x="8" y="8" width="48" height="48" rx="4" fill="#ffffff" fill-opacity="0.12"/>
+          <text x="118" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="2">SENAI</text>
+        </svg>
+        <h1 class="title">LOGICA - SENAI</h1>
+        <p>Use o <strong style="color:#22d3ee">dedo indicador</strong> para cortar orbs <strong style="color:#4ade80">verdes</strong>.</p>
+        <p>Evite os <strong style="color:#ef4444">vermelhos</strong> a todo custo.</p>
+        <p class="hint">Suporta 1 ou 2 mãos · Permita acesso à câmera</p>
+        <button class="btn-start" type="button" id="btnStart">INICIAR MISSÃO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tela de game over -->
+  <div class="overlay" id="overlayGameOver">
+    <div class="modal game-over">
+      <h1 class="title">GAME OVER</h1>
+      <p style="font-size:1.5rem">Pontuação final: <strong id="finalScore">0</strong></p>
+      <button class="btn-retry" type="button" id="btnRetry">TENTAR DE NOVO</button>
+    </div>
+  </div>
+
+  <!-- Webcam (oculta) + canvas onde o jogo é desenhado -->
+  <main>
+    <video id="video" playsinline hidden></video>
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="canvas-inner">
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <p class="footer-status">LOGICA - SENAI · ONLINE</p>
+
+  <!-- Bibliotecas de rastreamento de mãos (Google MediaPipe) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <script>
+    /**
+     * Objeto principal do jogo (equivalente a HandTrackingGame.tsx).
+     * spawnCircle = cria bolinhas | updateLogic = colisão e movimento | onResults = frame MediaPipe
+     */
+    const game = {
+      hands: null,
+      camera: null,
+      score: 0,
+      lives: 5,
+      gameStarted: false,
+      gameOver: false,
+      circles: [],
+      lastSpawn: 0,
+      multiHandLandmarks: [],
+      trails: {},
+      buff: { active: false, endTime: 0 },
+
+      get canvas() { return document.getElementById("gameCanvas"); },
+      get video() { return document.getElementById("video"); },
+      get ctx() { return this.canvas.getContext("2d"); },
+
+      /** Liga botões e aguarda scripts MediaPipe. */
+      init() {
+        document.getElementById("btnStart").onclick = () => this.start();
+        document.getElementById("btnRetry").onclick = () => this.start();
+        this.waitForMediaPipe();
+      },
+
+      /** Poll até window.Hands e Camera estarem disponíveis. */
+      waitForMediaPipe() {
+        const check = () => {
+          if (window.Hands && window.Camera && window.drawConnectors) {
+            document.getElementById("loader").style.display = "none";
+            document.getElementById("startContent").style.display = "block";
+            this.setupHands();
+          } else {
+            setTimeout(check, 200);
+          }
+        };
+        check();
+      },
+
+      /** Inicia câmera e envia cada frame para o modelo de mãos. */
+      setupHands() {
+        const hands = new window.Hands({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+        hands.onResults((results) => this.onResults(results));
+        this.hands = hands;
+
+        const camera = new window.Camera(this.video, {
+          onFrame: async () => {
+            if (this.video && this.hands)
+              await this.hands.send({ image: this.video });
+          },
+          width: 1280,
+          height: 720,
+        });
+        camera.start();
+        this.camera = camera;
+      },
+
+      start() {
+        this.score = 0;
+        this.lives = 5;
+        this.gameOver = false;
+        this.gameStarted = true;
+        this.circles = [];
+        this.lastSpawn = performance.now();
+        this.buff = { active: false, endTime: 0 };
+        this.updateHud();
+        document.getElementById("overlayStart").classList.remove("visible");
+        document.getElementById("overlayGameOver").classList.remove("visible");
+        document.getElementById("canvasWrap").classList.remove("buff-border");
+        document.getElementById("hudPanel").classList.remove("buff");
+        document.getElementById("buffLabel").classList.remove("active");
+      },
+
+      endGame() {
+        this.gameOver = true;
+        this.gameStarted = false;
+        this.buff.active = false;
+        document.getElementById("finalScore").textContent = this.score;
+        document.getElementById("overlayGameOver").classList.add("visible");
+        document.getElementById("buffLabel").classList.remove("active");
+        document.getElementById("hudPanel").classList.remove("buff");
+        document.getElementById("canvasWrap").classList.remove("buff-border");
+      },
+
+      updateHud() {
+        document.getElementById("scoreDisplay").textContent = this.score;
+        document.getElementById("livesDisplay").textContent = "♥".repeat(Math.max(0, this.lives));
+      },
+
+      activateBuff() {
+        if (this.buff.active) return;
+        this.buff.active = true;
+        this.buff.endTime = performance.now() + 10000;
+        document.getElementById("buffLabel").classList.add("active");
+        document.getElementById("hudPanel").classList.add("buff");
+        document.getElementById("canvasWrap").classList.add("buff-border");
+        this.circles.forEach((c) => {
+          c.type = "gold";
+          c.color = "rgba(255, 215, 0, 0.9)";
+        });
+      },
+
+      /** Nova bolinha no topo (verde / vermelha / dourada). */
+      spawnCircle(w) {
+        const interval = Math.max(400, 1000 - Math.floor(this.score / 10) * 50);
+        const now = performance.now();
+        if (now - this.lastSpawn <= interval) return;
+
+        let type = "score";
+        if (this.buff.active) type = "gold";
+        else {
+          const r = Math.random();
+          if (r > 0.98) type = "gold";
+          else if (r > 0.3) type = "score";
+          else type = "killer";
+        }
+
+        const radius = 25;
+        const colors = {
+          score: "rgba(34, 197, 94, 0.8)",
+          killer: "rgba(239, 68, 68, 0.8)",
+          gold: "rgba(255, 215, 0, 0.9)",
+        };
+        this.circles.push({
+          x: Math.random() * (w - 2 * radius) + radius,
+          y: -radius,
+          radius,
+          color: colors[type],
+          id: now,
+          type,
+          speed: 3 + Math.floor(this.score / 50) * 0.5,
+        });
+        this.lastSpawn = now;
+      },
+
+      drawCircles(ctx) {
+        for (const c of this.circles) {
+          ctx.save();
+          const trailLen = c.radius * 4;
+          const grad = ctx.createLinearGradient(c.x, c.y, c.x, c.y - trailLen);
+          grad.addColorStop(0, c.color);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(c.x - c.radius, c.y - trailLen, c.radius * 2, trailLen);
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+          ctx.fillStyle = c.color;
+          ctx.shadowColor = c.color;
+          ctx.shadowBlur = c.type === "gold" ? 40 : 20;
+          ctx.fill();
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+      },
+
+      /** Lógica por frame: buff, trilhas, colisão, vidas. */
+      updateLogic(ctx, w, h) {
+        if (this.buff.active) {
+          const rem = this.buff.endTime - performance.now();
+          if (rem <= 0) {
+            this.buff.active = false;
+            document.getElementById("buffLabel").classList.remove("active");
+            document.getElementById("hudPanel").classList.remove("buff");
+            document.getElementById("canvasWrap").classList.remove("buff-border");
+          } else {
+            document.getElementById("buffTime").textContent = Math.ceil(rem / 1000);
+          }
+        }
+
+        this.spawnCircle(w);
+
+        const fingertips = [];
+        if (this.multiHandLandmarks.length) {
+          for (const landmarks of this.multiHandLandmarks) {
+            const tip = landmarks[8];
+            if (tip) fingertips.push({ x: (1 - tip.x) * w, y: tip.y * h });
+          }
+        }
+
+        this.trails = {};
+        this.multiHandLandmarks.forEach((landmarks, i) => {
+          const tip = landmarks[8];
+          if (!tip) return;
+          const x = (1 - tip.x) * w, y = tip.y * h;
+          if (!this.trails[i]) this.trails[i] = [];
+          this.trails[i].push({ x, y });
+          if (this.trails[i].length > 20) this.trails[i].shift();
+        });
+
+        Object.values(this.trails).forEach((trail) => {
+          if (trail.length < 2) return;
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          const glow = this.buff.active ? "rgba(255,215,0,0.8)" : "rgba(0,255,255,0.8)";
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = glow;
+          ctx.lineWidth = 15;
+          ctx.strokeStyle = glow;
+          ctx.beginPath();
+          ctx.moveTo(trail[0].x, trail[0].y);
+          for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+          ctx.stroke();
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = "white";
+          ctx.stroke();
+          ctx.restore();
+        });
+
+        for (const tip of fingertips) {
+          ctx.beginPath();
+          ctx.arc(tip.x, tip.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = "white";
+          ctx.shadowColor = this.buff.active ? "gold" : "cyan";
+          ctx.shadowBlur = 15;
+          ctx.fill();
+        }
+
+        const surviving = [];
+        for (const c of this.circles) {
+          c.y += c.speed;
+          let hit = false, off = false;
+
+          if (c.y - c.radius > h) {
+            off = true;
+            if (c.type === "score" && !this.buff.active) {
+              this.lives--;
+              this.updateHud();
+              if (this.lives <= 0) { this.endGame(); return; }
+            }
+          }
+
+          if (!off) {
+            for (const tip of fingertips) {
+              const dx = tip.x - c.x, dy = tip.y - c.y;
+              if (Math.hypot(dx, dy) < c.radius + 15) { hit = true; break; }
+            }
+            if (hit) {
+              if (c.type === "score") { this.score += 10; this.updateHud(); }
+              else if (c.type === "gold") {
+                this.score += 20;
+                this.updateHud();
+                if (!this.buff.active) this.activateBuff();
+              } else if (!this.buff.active) { this.endGame(); return; }
+            }
+          }
+
+          if (!hit && !off) surviving.push(c);
+          else if (hit && c.type === "killer" && !this.buff.active) surviving.push(c);
+        }
+
+        if (!this.gameOver) {
+          this.circles = surviving;
+          this.drawCircles(ctx);
+        }
+      },
+
+      /** Desenha vídeo espelhado + landmarks + chama updateLogic se em jogo. */
+      onResults(results) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+        ctx.save();
+        ctx.clearRect(0, 0, w, h);
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(results.image, 0, 0, w, h);
+
+        this.multiHandLandmarks = results.multiHandLandmarks || [];
+        const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
+        for (const landmarks of this.multiHandLandmarks) {
+          if (drawConnectors && HAND_CONNECTIONS)
+            drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 5 });
+          if (drawLandmarks)
+            drawLandmarks(ctx, landmarks, { color: "#FF0000", lineWidth: 2 });
+        }
+        ctx.restore();
+
+        if (this.gameStarted && !this.gameOver)
+          this.updateLogic(ctx, w, h);
+        else if (this.gameOver)
+          this.drawCircles(ctx);
+      },
+    };
+
+    // Inicia ao carregar a página
+    game.init();
+  </script>
+</body>
+</html>

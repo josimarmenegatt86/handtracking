@@ -183,6 +183,11 @@
       return document.getElementById('canvas-container');
     }
 
+    /**
+     * Gera um ponto na superfície de um coração 3D usando equação paramétrica.
+     * @param {number} t - ângulo polar (0 a PI)
+     * @param {number} u - ângulo azimutal (0 a 2*PI)
+     */
     function getHeartPoint(t, u) {
       const x = 16 * Math.pow(Math.sin(u), 3) * Math.sin(t);
       const y = (13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * Math.sin(t);
@@ -190,6 +195,11 @@
       return new THREE.Vector3(x * 0.75, y * 0.75, z * 0.75);
     }
 
+    /**
+     * Renderiza o texto em um canvas oculto e extrai os pixels visíveis como pontos 2D.
+     * @param {string} text - texto a ser convertido em nuvem de pontos
+     * @returns {Array|null} lista de pontos {x, y, z} ou null se texto vazio
+     */
     function sampleText(text) {
       if (!text || text.trim() === '') return null;
 

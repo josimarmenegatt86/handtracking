@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saturno 3D Azul — Partículas | Josimar Menegatt</title>
-    <!-- MediaPipe Kitabxanaları -->
+    <!-- Bibliotecas MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -86,9 +86,9 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.querySelector('.main-stage').appendChild(renderer.domElement);
 
-            // Saturn (Mavi Rəngdə)
+            // Saturno (em azul)
             const saturnGeo = new THREE.SphereGeometry(4, 64, 64);
-            const saturnMat = new THREE.PointsMaterial({ color: 0x0088ff, size: 0.04 }); // Parlaq mavi
+            const saturnMat = new THREE.PointsMaterial({ color: 0x0088ff, size: 0.04 }); // Azul brilhante
             saturn = new THREE.Points(saturnGeo, saturnMat);
             scene.add(saturn);
 
@@ -98,7 +98,7 @@
                 saturnRandomDirs.push((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3);
             }
 
-            // Halqalar (Mavi çalarlarda)
+            // Anéis (em tons de azul)
             const ringCount = 12000;
             const ringGeo = new THREE.BufferGeometry();
             const rPositions = new Float32Array(ringCount * 3);
@@ -119,14 +119,14 @@
             rings.rotation.x = Math.PI / 3;
             scene.add(rings);
 
-            // Ulduzlar
+            // Estrelas
             const starGeo = new THREE.BufferGeometry();
             const starPos = new Float32Array(4000 * 3);
             for(let i=0; i<4000*3; i++) starPos[i] = (Math.random()-0.5) * 1000;
             starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
             scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 0.4})));
 
-            // Skelet
+            // Esqueleto
             handGroup = new THREE.Group();
             const skeletonGeo = new THREE.BufferGeometry();
             const skeletonMat = new THREE.LineBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.8 });
@@ -167,7 +167,7 @@
                 handGroup.localToWorld(attractionVector);
             }
 
-            // Saturn hissəcikləri
+            // Partículas de Saturno
             for(let i=0; i<saturnAttr.count; i++) {
                 const i3 = i * 3;
                 let x = saturnOrigPos[i3] + saturnRandomDirs[i3] * explosionFactor;
@@ -175,7 +175,7 @@
                 let z = saturnOrigPos[i3+2] + saturnRandomDirs[i3+2] * explosionFactor;
 
                 if (isExploded) {
-                    // Cəlb olunma sürəti artırıldı (0.05 -> 0.08)
+                    // Velocidade de atração aumentada (0.05 -> 0.08)
                     x = THREE.MathUtils.lerp(x, attractionVector.x, 0.08);
                     y = THREE.MathUtils.lerp(y, attractionVector.y, 0.08);
                     z = THREE.MathUtils.lerp(z, attractionVector.z, 0.08);
@@ -187,7 +187,7 @@
             }
             saturnAttr.needsUpdate = true;
 
-            // Halqa hissəcikləri
+            // Partículas dos anéis
             for(let i=0; i<ringAttr.count; i++) {
                 const i3 = i * 3;
                 let x = ringOrigPos[i3] + ringRandomDirs[i3] * explosionFactor;
@@ -195,7 +195,7 @@
                 let z = ringOrigPos[i3+2] + ringRandomDirs[i3+2] * explosionFactor;
 
                 if (isExploded) {
-                    // Cəlb olunma sürəti artırıldı (0.03 -> 0.06)
+                    // Velocidade de atração aumentada (0.03 -> 0.06)
                     x = THREE.MathUtils.lerp(x, attractionVector.x, 0.06);
                     y = THREE.MathUtils.lerp(y, attractionVector.y, 0.06);
                     z = THREE.MathUtils.lerp(z, attractionVector.z, 0.06);
@@ -260,7 +260,7 @@
                     const positions = [];
                     const linePositions = [];
                     
-                    // Ovuc mərkəzini dinamik olaraq yeniləyirik
+                    // Atualizamos o centro da palma dinamicamente
                     currentHandCenter.set(
                         ((1 - landmarks[9].x) - 0.5) * 15,
                         -(landmarks[9].y - 0.5) * 10,
@@ -302,7 +302,7 @@
                         }
                         lastHandPos = indexTip;
                     } else {
-                        // ƏL AÇIQDIR - Hissəciklər əli izləyir
+                        // MÃO ABERTA - Partículas seguem a mão
                         isExploded = true;
                         lastHandPos = null;
                     }

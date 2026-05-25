@@ -57,8 +57,8 @@
     const stageEl = document.getElementById("main-stage");
 
 /**
- * Professional Quantum Galaxy Engine v2.7
- * Təkmilləşdirilmiş Skelet Görünüşü
+ * Motor de Galáxia Quântica Profissional v2.7
+ * Visualização de Esqueleto Aprimorada
  */
 
 let scene, camera, renderer, starSystem;
@@ -78,8 +78,8 @@ const PALETTE = {
     fist: new THREE.Color(0xff4400),
     disintegrate: new THREE.Color(0x00ffcc),
     open: new THREE.Color(0x00f2ff),
-    joint: 0x00f2ff, // Neon Göy
-    bone: 0x00ffff   // Daha parlaq Siyan
+    joint: 0x00f2ff, // Ciano neon (articulações)
+    bone: 0x00ffff   // Ciano mais brilhante (ossos)
 };
 
 async function init() {
@@ -109,7 +109,7 @@ async function init() {
 }
 
 function createSkeletonObjects() {
-    // Oynaqlar - Ölçü 4-dən 7-yə artırıldı, parlaqlıq artırıldı
+    // Articulações - Tamanho aumentado de 4 para 7, brilho aumentado
     const jointGeo = new THREE.SphereGeometry(7, 12, 12);
     const jointMat = new THREE.MeshBasicMaterial({ 
         color: PALETTE.joint, 
@@ -121,17 +121,17 @@ function createSkeletonObjects() {
     for (let i = 0; i < 21; i++) {
         const mesh = new THREE.Mesh(jointGeo, jointMat);
         mesh.visible = false;
-        mesh.renderOrder = 999; // Həmişə ulduzların önündə görünsün
+        mesh.renderOrder = 999; // Sempre visível na frente das estrelas
         joints.push(mesh);
         handGroup.add(mesh);
     }
 
-    // Sümüklər - Rəng daha parlaq edildi və renderOrder artırıldı
+        // Ossos - Cor mais brilhante e renderOrder aumentado
     const boneMat = new THREE.LineBasicMaterial({ 
         color: PALETTE.bone, 
         transparent: true, 
         opacity: 0.7,
-        linewidth: 3, // Qeyd: Bəzi brauzerlərdə WebGL linewidth məhdudiyyəti ola bilər
+        linewidth: 3, // Nota: alguns navegadores têm limitação de linewidth no WebGL
         depthTest: false
     });
 
@@ -249,7 +249,7 @@ function onHandResults(results) {
         
         updateSkeleton(lm);
 
-        // Sürətli rotasiya - Həssaslıq bir qədər də artırıldı (0.15 -> 0.18)
+        // Rotação rápida - Sensibilidade levemente aumentada (0.15 -> 0.18)
         targetRotationY = (lm[0].x - 0.5) * 8.5; 
         targetRotationX = (lm[0].y - 0.5) * 5.5;
 
@@ -288,7 +288,7 @@ function onHandResults(results) {
 
 function updateSkeleton(landmarks) {
     landmarks.forEach((pt, i) => {
-        // Koordinatları daha geniş məkana yayırıq ki, daha belirgin olsun
+        // Espalhamos as coordenadas em um espaço maior para maior visibilidade
         const x = (0.5 - pt.x) * 1200; 
         const y = (0.5 - pt.y) * 1000;
         const z = -pt.z * 1000; 
@@ -331,7 +331,7 @@ function animate() {
     const delta = clock.getDelta();
     const elapsed = clock.getElapsedTime();
 
-    // Rotasiya hamarlaşdırma əmsalı (0.15 -> 0.18) fırlanmanı daha çevik edir
+    // Fator de suavização de rotação (0.15 -> 0.18) torna a rotação mais ágil
     lerpRotationX += (targetRotationX - lerpRotationX) * 0.18;
     lerpRotationY += (targetRotationY - lerpRotationY) * 0.18;
 

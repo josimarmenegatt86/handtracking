@@ -137,6 +137,11 @@
       uiCanvas.height = mainCanvas.height = h;
     }
 
+    /**
+     * Detecta gestos da mão:
+     * - isDrawing: indicador levantado + médio fechado
+     * - isClearing: polegar para cima + indicador fechado
+     */
     function checkGestures(landmarks) {
       const isDrawing = landmarks[8].y < landmarks[6].y && landmarks[12].y > landmarks[10].y;
       const isClearing = landmarks[4].y < landmarks[3].y && landmarks[8].y > landmarks[6].y;

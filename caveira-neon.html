@@ -61,9 +61,9 @@
         let positions = [], targetPositions = [], velocities = [], colors = [];
         let interactionPos = new THREE.Vector3(2000, 2000, 2000); 
 
-        // Rəng sabitləri
-        const baseColor = new THREE.Color(0x00ffff); // Mavi
-        const scatterColor = new THREE.Color(0xffd700); // Qızılı
+        // Constantes de cor
+        const baseColor = new THREE.Color(0x00ffff); // Azul
+        const scatterColor = new THREE.Color(0xffd700); // Dourado
 
         function resize() {
             skelCanvas.width = stageEl.clientWidth;
@@ -102,7 +102,7 @@
                 positions.push((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50);
                 velocities.push(0, 0, 0);
                 
-                // Başlanğıc rəng (Mavi)
+                // Cor inicial (Azul)
                 colors.push(baseColor.r, baseColor.g, baseColor.b);
             }
         }
@@ -128,7 +128,7 @@
                 opacity: 0.85,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
-                vertexColors: true // Vertex rənglərini aktivləşdiririk
+                vertexColors: true // Ativamos as cores por vértice
             });
 
             particleSystem = new THREE.Points(geometry, material);
@@ -152,7 +152,7 @@
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
                 const indexTip = landmarks[8];
-                // Mirror effect üçün 0.5 - x istifadə olunur
+                // Usa 0.5 - x para efeito espelho
                 interactionPos.set((0.5 - indexTip.x) * 20, (0.5 - indexTip.y) * 15, 0);
                 drawRealisticSkeleton(landmarks);
             } else {
@@ -231,7 +231,7 @@
             for (let i = 0; i < particleCount; i++) {
                 const i3 = i * 3;
                 
-                // Rotasiya hesablanması
+                // Cálculo de rotação
                 let tx = targetPositions[i3];
                 let ty = targetPositions[i3 + 1];
                 let tz = targetPositions[i3 + 2];
@@ -242,7 +242,7 @@
                 let py = posAttr.array[i3 + 1];
                 let pz = posAttr.array[i3 + 2];
 
-                // İnteraksiya (Dağılma)
+                // Interação (Dispersão)
                 const dx = px - interactionPos.x;
                 const dy = py - interactionPos.y;
                 const dz = pz - interactionPos.z;
@@ -257,26 +257,26 @@
                     isScattered = true;
                 }
 
-                // Geri qayıtma qüvvəsi
+                // Força de retorno
                 velocities[i3] += (rx - px) * 0.02;
                 velocities[i3 + 1] += (ty - py) * 0.02;
                 velocities[i3 + 2] += (rz - pz) * 0.02;
 
-                // Sürtünmə
+                // Atrito
                 velocities[i3] *= 0.88;
                 velocities[i3 + 1] *= 0.88;
                 velocities[i3 + 2] *= 0.88;
 
-                // Mövqe yeniləmə
+                // Atualização de posição
                 posAttr.array[i3] += velocities[i3];
                 posAttr.array[i3 + 1] += velocities[i3 + 1];
                 posAttr.array[i3 + 2] += velocities[i3 + 2];
 
-                // --- Rəng Keçidi Məntiqi ---
-                // Əgər zərrəcik hədəfindən uzaqdırsa və ya əl yaxınındadırsa qızılıya meyl etsin
+                // --- Lógica de Transição de Cor ---
+                // Se a partícula está longe do alvo ou a mão está próxima, tende para dourado
                 const distFromTarget = Math.sqrt(Math.pow(rx-px, 2) + Math.pow(ty-py, 2) + Math.pow(rz-pz, 2));
                 
-                // Rəng hədəfini təyin edirik
+                // Definimos o alvo de cor
                 let targetR, targetG, targetB;
                 if (isScattered || distFromTarget > 1.5) {
                     targetR = scatterColor.r;
@@ -288,7 +288,7 @@
                     targetB = baseColor.b;
                 }
 
-                // Rəngləri rəvan keçidlə yeniləyirik (Lerp)
+                // Atualizamos as cores com transição suave (Lerp)
                 colAttr.array[i3] += (targetR - colAttr.array[i3]) * 0.05;
                 colAttr.array[i3+1] += (targetG - colAttr.array[i3+1]) * 0.05;
                 colAttr.array[i3+2] += (targetB - colAttr.array[i3+2]) * 0.05;

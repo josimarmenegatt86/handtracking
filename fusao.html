@@ -185,7 +185,7 @@
         const geometry = new THREE.BufferGeometry();
 
         let isTextMode = false;
-        let isInitialLoad = true; // İlk yüklənməni izləmək üçün
+        let isInitialLoad = true; // Para rastrear o carregamento inicial
         let mouse = new THREE.Vector3(-1000, -1000, 0);
 
         const baseColor = new THREE.Color(0x00f2ff);
@@ -209,7 +209,7 @@
 
         function textToPoints(text) {
             isTextMode = true;
-            isInitialLoad = false; // Mətn daxil edildisə artıq ilk yüklənmə deyil
+            isInitialLoad = false; // Texto inserido, não é mais carregamento inicial
             const fontSize = 100;
             tCtx.font = `bold ${fontSize}px Arial`;
             
@@ -259,7 +259,7 @@
             }
         }
 
-        // İlk mövqeləri daha uzağa (məsələn 1200 vahid) atırıq ki, gəlmələri vaxt aparsın
+        // Lançamos as posições iniciais mais longe (ex: 1200 unidades) para que a chegada leve tempo
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
             positions[i3] = (Math.random() - 0.5) * 1200;
@@ -309,8 +309,8 @@
             
             const mouseInfluenceRadius = isTextMode ? 12 : 25;
             
-            // İlk yüklənmə zamanı sürəti (lerpSpeed) azaldırıq (0.01), 
-            // sonra tədricən normal sürətə (0.05) qayıdırıq.
+            // Durante o carregamento inicial reduzimos a velocidade (lerpSpeed) para 0.01, 
+            // depois retornamos gradualmente ao normal (0.05).
             let currentLerpSpeed = isInitialLoad ? 0.015 : 0.05;
             const friction = isInitialLoad ? 0.95 : 0.85;   
 
@@ -395,7 +395,7 @@
             loadingScreen.style.opacity = '0';
             setTimeout(() => {
                 loadingScreen.style.display = 'none';
-                // Animasiya başladıqdan bir neçə saniyə sonra normal sürətə keçid edə bilərik
+                // Podemos transitar para velocidade normal alguns segundos após o início da animação
                 setTimeout(() => { isInitialLoad = false; }, 4000);
             }, 500);
             animate();

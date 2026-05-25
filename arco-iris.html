@@ -75,7 +75,7 @@
         let strokes = []; 
         let currentStroke = null;
         let draggedStroke = null;
-        let potentialStroke = null; // Tutula biləcək xətt (hover effekti üçün)
+        let potentialStroke = null; // Traço que pode ser selecionado (para efeito hover)
         let dragOffset = { x: 0, y: 0 };
         let globalHue = 0;
 
@@ -120,7 +120,7 @@
             return Math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
         }
 
-        // Bir xəttin sərhədlərini hesablayır (Performance üçün)
+        // Calcula os limites de um traço (para desempenho)
         function getStrokeBounds(stroke) {
             if (!stroke.points.length) return null;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -152,7 +152,7 @@
                 const thumbTip = landmarks[4];
                 const middleTip = landmarks[12];
                 
-                // Həssaslıq eşiyi (0.06 bir qədər daha geniş məsafəyə icazə verir)
+                // Limiar de sensibilidade (0.06 permite uma distância um pouco maior)
                 const pinchDist = getDist(indexTip, thumbTip);
                 const isPinching = pinchDist < 0.06;
                 const isDrawing = indexTip.y < landmarks[6].y && middleTip.y > landmarks[10].y && !isPinching;
@@ -161,17 +161,17 @@
                 const thumbPos = { x: thumbTip.x * mainCanvas.width, y: thumbTip.y * mainCanvas.height };
                 const midPoint = { x: (pos.x + thumbPos.x)/2, y: (pos.y + thumbPos.y)/2 };
 
-                // 1. POTENSİAL TUTULA BİLƏCƏK XƏTTİ TAPMA (Hover effekti)
+                // 1. ENCONTRAR TRAÇO POTENCIALMENTE SELECIONÁVEL (efeito hover)
                 potentialStroke = null;
                 if (!isDrawing && !draggedStroke) {
                     for (let i = strokes.length - 1; i >= 0; i--) {
                         let s = strokes[i];
                         const bounds = getStrokeBounds(s);
-                        // Əvvəlcə qutu daxilindədirmi bax (Sürət üçün)
+                        // Primeiro verifica se está dentro da caixa (para desempenho)
                         if (midPoint.x >= bounds.minX && midPoint.x <= bounds.maxX && 
                             midPoint.y >= bounds.minY && midPoint.y <= bounds.maxY) {
                             
-                            // Sonra ən yaxın nöqtəyə bax (Həssaslıq üçün - 45px radius)
+                            // Depois verifica o ponto mais próximo (para precisão - raio de 45px)
                             if (s.points.some(p => getDist(midPoint, p) < 45)) {
                                 potentialStroke = s;
                                 break;
@@ -180,7 +180,7 @@
                     }
                 }
 
-                // 2. ÇİZMƏ
+                // 2. DESENHO
                 if (isDrawing) {
                     draggedStroke = null;
                     if (!currentStroke) {
@@ -193,7 +193,7 @@
                     currentStroke = null;
                 }
 
-                // 3. DAŞIMA (DRAG)
+                // 3. ARRASTAR (DRAG)
                 if (isPinching) {
                     if (!draggedStroke && potentialStroke) {
                         draggedStroke = potentialStroke;
@@ -205,7 +205,7 @@
                         const dy = midPoint.y - dragOffset.y;
                         draggedStroke.points.forEach(p => { p.x += dx; p.y += dy; });
                         dragOffset = { ...midPoint };
-                        // Daşıyarkən rəngləri yüngülcə yenilə (opsional canlılıq)
+                        // Atualiza cores levemente ao arrastar (vivacidade opcional)
                         if (Math.random() > 0.8) {
                              particles.push(new SparkParticle(midPoint.x, midPoint.y, globalHue));
                         }
@@ -217,13 +217,13 @@
                 drawHand(landmarks, isDrawing, isPinching, !!draggedStroke || !!potentialStroke);
             }
 
-            // XƏTLƏRİ ÇƏKİRİK
+            // DESENHAMOS OS TRAÇOS
             strokes.forEach(stroke => {
                 const isSelected = (stroke === draggedStroke || stroke === potentialStroke);
                 drawMultiColorStroke(mainCtx, stroke, isSelected);
             });
 
-            // HİSSƏCİKLƏR
+            // PARTÍCULAS
             particles = particles.filter(p => p.life > 0);
             particles.forEach(p => { p.update(); p.draw(mainCtx); });
         }
@@ -232,7 +232,7 @@
             if (stroke.points.length < 2) return;
             ctx.save();
             
-            // Kölgə effekti
+            // Efeito de sombra
             ctx.shadowColor = "rgba(0,0,0,0.7)";
             ctx.shadowBlur = highlight ? 20 : 12;
             ctx.shadowOffsetX = 6;
@@ -245,14 +245,14 @@
                 const p1 = stroke.points[i - 1];
                 const p2 = stroke.points[i];
                 ctx.beginPath();
-                // Seçiləndə xətt daha qalın və parlaq olur
+                // Quando selecionado, o traço fica mais grosso e brilhante
                 ctx.lineWidth = highlight ? 16 : 10;
                 ctx.strokeStyle = `hsl(${p2.hue}, 100%, ${highlight ? 65 : 50}%)`;
                 ctx.moveTo(p1.x, p1.y);
                 ctx.lineTo(p2.x, p2.y);
                 ctx.stroke();
 
-                // Üst parlaqlıq (3D silindr effekti)
+                // Brilho superior (efeito de cilindro 3D)
                 ctx.save();
                 ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
                 ctx.lineWidth = highlight ? 6 : 3;
@@ -264,11 +264,11 @@
         }
 
         function drawHand(landmarks, isDrawing, isPinching, isNearStroke) {
-            // Əlin rəngi vəziyyətə görə dəyişir
+            // A cor da mão muda conforme o estado
             let baseColor = "white";
             if (isDrawing) baseColor = `hsl(${globalHue}, 100%, 70%)`;
             else if (isPinching) baseColor = "#00ffcc";
-            else if (isNearStroke) baseColor = "#ffcc00"; // Xəttə yaxınlaşanda sarı parıltı
+            else if (isNearStroke) baseColor = "#ffcc00"; // Brilho amarelo ao se aproximar do traço
 
             uiCtx.save();
             uiCtx.shadowBlur = 20;
@@ -288,7 +288,7 @@
                 uiCtx.fill();
             }
 
-            // Pinch (Tutma) nöqtəsi indikatoru
+            // Indicador do ponto de pinça (agarrar)
             if (isPinching || isNearStroke) {
                 const thumb = landmarks[4];
                 const index = landmarks[8];

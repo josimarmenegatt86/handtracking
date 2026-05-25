@@ -215,11 +215,11 @@ function updateScore(amount) {
 
 function updateSpeed(delta) {
     speedMultiplier += delta;
-    // Sürəti 1.0 və 3.0 arasında məhdudlaşdırırıq
+    // Limita a velocidade entre 1.0 e 3.0
     speedMultiplier = Math.max(MIN_SPEED, Math.min(MAX_SPEED, parseFloat(speedMultiplier.toFixed(1))));
     speedElement.innerText = speedMultiplier.toFixed(1);
 
-    // Sürət dəyişəndə vizual bildiriş
+    // Notificação visual ao mudar a velocidade
     speedContainer.classList.add('scale-110');
     if (delta < 0) {
         speedContainer.classList.add('border-red-500');
@@ -245,7 +245,7 @@ function onResults(results) {
         if (t.active) {
             t.draw();
         } else if (t.escaped) {
-            // Hədəf qaçdıqda həm xal azalır, həm sürət
+            // Quando o alvo escapa, pontos e velocidade diminuem
             updateScore(-5);
             updateSpeed(-0.1);
             t.escaped = false;
@@ -308,7 +308,7 @@ function shoot(vizX, vizY) {
         if (dist < t.radius + 65) { 
             t.active = false;
             updateScore(10);
-            updateSpeed(0.1); // Uğurlu vuruş sürəti artırır
+            updateSpeed(0.1); // Acerto bem-sucedido aumenta a velocidade
             hitOccurred = true;
 
             for (let i = 0; i < 40; i++) {

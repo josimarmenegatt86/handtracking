@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Saturno 3D — Tempo Real | Josimar Menegatt</title>
-    <!-- Kitabxanalar əvvəlcədən yüklənir -->
+    <!-- Bibliotecas carregadas previamente -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -112,7 +112,7 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 document.querySelector('.main-stage').appendChild(renderer.domElement);
 
-                // PLANET YARADILMASI
+                // CRIAÇÃO DO PLANETA
                 const planetPointCount = 15000;
                 const planetGeom = new THREE.BufferGeometry();
                 const pPositions = new Float32Array(planetPointCount * 3);
@@ -146,7 +146,7 @@
                 planetParticles = new THREE.Points(planetGeom, planetMat);
                 scene.add(planetParticles);
 
-                // HALQA YARADILMASI
+                // CRIAÇÃO DOS ANÉIS
                 const ringPointCount = 10000;
                 const ringGeom = new THREE.BufferGeometry();
                 const rPositions = new Float32Array(ringPointCount * 3);

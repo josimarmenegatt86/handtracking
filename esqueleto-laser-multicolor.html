@@ -117,7 +117,7 @@
         let isDragging = false;
         let lastFingerPos = { x: 0, y: 0 };
 
-        // Rəng siyahısı: Qırmızı, Ağ, Göy, Sarı, Narıncı
+        // Lista de cores: Vermelho, Branco, Azul, Amarelo, Laranja
         const rainbowColors = ['#ff0000', '#ffffff', '#0000ff', '#ffff00', '#ff8000'];
 
         function setupCanvas() {
@@ -244,7 +244,7 @@
                         currentPath = { points: [], id: Date.now() };
                         drawings.push(currentPath);
                     }
-                    // Nöqtəni əlavə edərkən ümumi uzunluğu hesablamaq üçün məsafəni də saxlaya bilərik
+        // Ao adicionar o ponto, podemos guardar a distância para calcular o comprimento total
                     let lastP = currentPath.points[currentPath.points.length - 1];
                     let dist = lastP ? Math.hypot(ix - lastP.x, iy - lastP.y) : 0;
                     let totalDist = lastP ? (lastP.totalDist + dist) : 0;
@@ -310,13 +310,13 @@
                 
                 const isSelected = selectedDrawing && selectedDrawing.id === d.id;
                 
-                // Hər seqmenti (nöqtələr arası məsafəni) ayrılıqda rəngləyirik
+                // Colorimos cada segmento (distância entre pontos) individualmente
                 for (let i = 1; i < d.points.length; i++) {
                     const p1 = d.points[i - 1];
                     const p2 = d.points[i];
                     
-                    // "1sm" effekti üçün hər 40 pikseldən (təxmini 1sm) bir rəngi dəyişirik
-                    // totalDist istifadə edərək rəngin xətt boyu sabit qalmasını təmin edirik
+                    // Para o efeito "1cm", mudamos a cor a cada 40 pixels (aproximadamente 1cm)
+                    // Usando totalDist garantimos que a cor permaneça consistente ao longo do traço
                     const colorIndex = Math.floor(p1.totalDist / 40) % rainbowColors.length;
                     const currentColor = isSelected ? '#ffff00' : rainbowColors[colorIndex];
 
@@ -331,7 +331,7 @@
                     canvasCtx.lineTo(p2.x, p2.y);
                     canvasCtx.stroke();
 
-                    // Daxili ağ xətt effekti
+                    // Efeito de linha branca interna
                     canvasCtx.shadowBlur = 0;
                     canvasCtx.strokeStyle = 'rgba(255,255,255,0.8)';
                     canvasCtx.lineWidth = isSelected ? 3 : 2;
