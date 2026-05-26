@@ -1,45 +1,93 @@
-@ -0,0 +1,525 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!--
-  index.html — Versão standalone do Hand Slicer (LOGICA - SENAI) para GitHub Pages.
-  Um único arquivo: HTML + CSS + JavaScript + MediaPipe via CDN.
-  Não precisa de npm/Next.js para rodar.
+  fatiador.html  Fatiador de Bolinhas standalone (HTML + CSS + JS + MediaPipe via CDN).
+  Corte as bolinhas verdes com o dedo indicador; evite as vermelhas.
+  Buff dourado: 2x pontos por 10 segundos.
 -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Logica - SENAI</title>
+  <title>Fatiador de Bolinhas  Hand Tracking | Josimar Menegatt</title>
+
+  <!-- MediaPipe: camera, deteccao de maos e utilitarios de desenho -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Layout principal: cabecalho fixo + area de jogo flexivel */
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
       background: #0a0a0a;
       color: #e5e5e5;
-      min-height: 100dvh;
+      height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding-top: 5rem;
     }
+
+    /* Cabecalho padrao do projeto */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    /* Area principal: ocupa o restante da altura */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0;
+      overflow: hidden; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+
+    /* Fundo cyberpunk (grade + brilho)  posicionados dentro da .main-stage */
     .grid-bg {
-      position: fixed; inset: 0; z-index: 0; opacity: 0.2; pointer-events: none;
+      position: absolute; inset: 0; z-index: 0; opacity: 0.2; pointer-events: none;
       background-image:
         linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px);
       background-size: 40px 40px;
     }
     .glow {
-      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
       width: 600px; height: 300px;
       background: rgba(6,182,212,0.2); filter: blur(100px);
       border-radius: 50%; pointer-events: none; z-index: 0;
     }
-    main { position: relative; z-index: 1; }
+
+    /* HUD: pontuacao e vidas  posicionado dentro da .main-stage */
     .hud {
-      position: fixed; top: 1.5rem; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
       z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
     }
     .buff-label {
@@ -59,8 +107,10 @@
     .hud-panel .score-val { color: #22d3ee; }
     .hud-panel.buff .score-val { color: #facc15; }
     .hud-panel .lives-val { color: #ef4444; }
+
+    /* Overlays (tela inicial e game over)  posicionados dentro da .main-stage */
     .overlay {
-      position: fixed; inset: 0; z-index: 30;
+      position: absolute; inset: 0; z-index: 30;
       display: none; flex-direction: column; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.9); backdrop-filter: blur(12px);
     }
@@ -106,6 +156,8 @@
       border: none; border-radius: 0.75rem; cursor: pointer; margin-top: 1rem;
     }
     .btn-retry:hover { filter: brightness(1.2); }
+
+    /* Spinner de carregamento */
     .loader { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
     .spinner { width: 6rem; height: 6rem; position: relative; }
     .spinner::before, .spinner::after {
@@ -116,114 +168,104 @@
     .spinner::after { border-color: #22d3ee; border-top-color: transparent; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes ping { 75%, 100% { transform: scale(1.3); opacity: 0; } }
+
+    /* Canvas ocupa toda a area disponivel */
     .canvas-wrap {
-      position: relative; padding: 2px; border-radius: 1.5rem;
-      background: linear-gradient(135deg, #06b6d4, #9333ea, #06b6d4);
-      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      position: absolute; inset: 0;
+      padding: 0; border-radius: 0;
+      background: none; box-shadow: none;
+      display: flex; align-items: stretch;
+      z-index: 1;
     }
-    .canvas-wrap.buff-border { background: linear-gradient(135deg, #8b5cf6, #facc15, #8b5cf6); }
+    .canvas-wrap.buff-border { outline: 3px solid #facc15; }
     .canvas-inner {
-      border-radius: 1.25rem; overflow: hidden;
-      background: #000; border: 4px solid #111;
+      flex: 1; border-radius: 0; overflow: hidden;
+      background: #000; border: none;
     }
     #gameCanvas {
-      display: block; max-width: 90vw; max-height: calc(100dvh - 8rem);
-      width: auto; height: auto;
+      display: block; width: 100%; height: 100%;
     }
+
+    /* Rodape de status */
     .footer-status {
-      position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
       color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
-    }
-    /* Logo SENAI — canto superior e tela inicial */
-    .logo-senai {
-      position: fixed; top: 1rem; left: 1rem; z-index: 40;
-      pointer-events: none;
-      filter: drop-shadow(0 2px 12px rgba(0, 61, 165, 0.6));
-      border-radius: 6px;
-    }
-    .logo-senai--modal {
-      position: static;
-      display: block;
-      margin: 0 auto 1.25rem;
-      width: 180px;
-      height: auto;
     }
   </style>
 </head>
 <body>
-  <!-- Fundo cyberpunk (grade + brilho) -->
-  <div class="grid-bg"></div>
-  <div class="glow"></div>
 
-  <!-- Logo SENAI (SVG embutido — troque por <img src="senai-logo.png"> se tiver o arquivo oficial) -->
-  <svg class="logo-senai" width="140" height="41" viewBox="0 0 220 64" role="img" aria-label="SENAI">
-    <rect width="220" height="64" rx="6" fill="#003DA5"/>
-    <rect x="8" y="8" width="48" height="48" rx="4" fill="#ffffff" fill-opacity="0.12"/>
-    <text x="118" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="2">SENAI</text>
-  </svg>
-
-  <!-- HUD: pontuação e vidas -->
-  <div class="hud">
-    <div class="buff-label" id="buffLabel">BUFF: <span id="buffTime">0</span>s</div>
-    <div class="hud-panel" id="hudPanel">
-      <div>SCORE <span class="val score-val" id="scoreDisplay">0</span></div>
-      <div style="width:1px;height:2rem;background:rgba(255,255,255,0.2)"></div>
-      <div>LIVES <span class="val lives-val" id="livesDisplay">♥♥♥♥♥</span></div>
+  <!-- Cabecalho padrao do projeto -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="../assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Fatiador de Bolinhas</span>
+      <span class="dev-role">Corte as bolinhas verdes com o indicador. Evite as vermelhas. Bônus dourado: 2x pontos por 10s.</span>
     </div>
-  </div>
+    <a class="dev-back-link" href="../index.html"> Início</a>
+  </header>
 
-  <!-- Tela inicial / carregamento MediaPipe -->
-  <div class="overlay visible" id="overlayStart">
-    <div class="modal">
-      <div class="loader" id="loader">
-        <div class="spinner"></div>
-        <p style="color:#22d3ee;font-family:monospace;letter-spacing:0.15em">INICIALIZANDO SISTEMAS...</p>
-      </div>
-      <div id="startContent" style="display:none">
-        <svg class="logo-senai logo-senai--modal" viewBox="0 0 220 64" role="img" aria-label="SENAI">
-          <rect width="220" height="64" rx="6" fill="#003DA5"/>
-          <rect x="8" y="8" width="48" height="48" rx="4" fill="#ffffff" fill-opacity="0.12"/>
-          <text x="118" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="2">SENAI</text>
-        </svg>
-        <h1 class="title">LOGICA - SENAI</h1>
-        <p>Use o <strong style="color:#22d3ee">dedo indicador</strong> para cortar orbs <strong style="color:#4ade80">verdes</strong>.</p>
-        <p>Evite os <strong style="color:#ef4444">vermelhos</strong> a todo custo.</p>
-        <p class="hint">Suporta 1 ou 2 mãos · Permita acesso à câmera</p>
-        <button class="btn-start" type="button" id="btnStart">INICIAR MISSÃO</button>
+  <!-- Area principal do jogo -->
+  <div class="main-stage" id="main-stage">
+
+    <!-- Fundo cyberpunk -->
+    <div class="grid-bg"></div>
+    <div class="glow"></div>
+
+    <!-- HUD: pontuacao e vidas -->
+    <div class="hud">
+      <div class="buff-label" id="buffLabel">BÔNUS: <span id="buffTime">0</span>s</div>
+      <div class="hud-panel" id="hudPanel">
+        <div>PONTOS <span class="val score-val" id="scoreDisplay">0</span></div>
+        <div style="width:1px;height:2rem;background:rgba(255,255,255,0.2)"></div>
+        <div>VIDAS <span class="val lives-val" id="livesDisplay"></span></div>
       </div>
     </div>
-  </div>
 
-  <!-- Tela de game over -->
-  <div class="overlay" id="overlayGameOver">
-    <div class="modal game-over">
-      <h1 class="title">GAME OVER</h1>
-      <p style="font-size:1.5rem">Pontuação final: <strong id="finalScore">0</strong></p>
-      <button class="btn-retry" type="button" id="btnRetry">TENTAR DE NOVO</button>
+    <!-- Tela inicial / carregamento MediaPipe -->
+    <div class="overlay visible" id="overlayStart">
+      <div class="modal">
+        <div class="loader" id="loader">
+          <div class="spinner"></div>
+          <p style="color:#22d3ee;font-family:monospace;letter-spacing:0.15em">INICIALIZANDO SISTEMAS...</p>
+        </div>
+        <div id="startContent" style="display:none">
+          <h1 class="title">FATIADOR DE BOLINHAS</h1>
+          <p>Use o <strong style="color:#22d3ee">dedo indicador</strong> para cortar as bolinhas <strong style="color:#4ade80">verdes</strong>.</p>
+          <p>Evite as <strong style="color:#ef4444">vermelhas</strong> a todo custo.</p>
+          <p class="hint">Suporta 1 ou 2 mãos  Permita o acesso à câmera</p>
+          <button class="btn-start" type="button" id="btnStart">INICIAR</button>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- Webcam (oculta) + canvas onde o jogo é desenhado -->
-  <main>
+    <!-- Tela de fim de jogo -->
+    <div class="overlay" id="overlayGameOver">
+      <div class="modal game-over">
+        <h1 class="title">FIM DE JOGO</h1>
+        <p style="font-size:1.5rem">Pontuação final: <strong id="finalScore">0</strong></p>
+        <button class="btn-retry" type="button" id="btnRetry">TENTAR NOVAMENTE</button>
+      </div>
+    </div>
+
+    <!-- Webcam (oculta) + canvas onde o jogo e desenhado -->
     <video id="video" playsinline hidden></video>
     <div class="canvas-wrap" id="canvasWrap">
       <div class="canvas-inner">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
       </div>
     </div>
-  </main>
 
-  <p class="footer-status">LOGICA - SENAI · ONLINE</p>
+    <p class="footer-status">FATIADOR DE BOLINHAS  AO VIVO</p>
 
-  <!-- Bibliotecas de rastreamento de mãos (Google MediaPipe) -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  </div><!-- fim .main-stage -->
 
   <script>
     /**
-     * Objeto principal do jogo (equivalente a HandTrackingGame.tsx).
-     * spawnCircle = cria bolinhas | updateLogic = colisão e movimento | onResults = frame MediaPipe
+     * Objeto principal do jogo  Hand Slicer.
+     * spawnCircle = cria bolinhas | updateLogic = colisao e movimento | onResults = frame MediaPipe
      */
     const game = {
       hands: null,
@@ -238,18 +280,19 @@
       trails: {},
       buff: { active: false, endTime: 0 },
 
+      // Getters para acessar elementos DOM sem armazenar referencias fixas
       get canvas() { return document.getElementById("gameCanvas"); },
-      get video() { return document.getElementById("video"); },
-      get ctx() { return this.canvas.getContext("2d"); },
+      get video()  { return document.getElementById("video"); },
+      get ctx()    { return this.canvas.getContext("2d"); },
 
-      /** Liga botões e aguarda scripts MediaPipe. */
+      /** Liga botoes e aguarda scripts MediaPipe carregarem. */
       init() {
-        document.getElementById("btnStart").onclick = () => this.start();
-        document.getElementById("btnRetry").onclick = () => this.start();
+        document.getElementById("btnStart").onclick  = () => this.start();
+        document.getElementById("btnRetry").onclick  = () => this.start();
         this.waitForMediaPipe();
       },
 
-      /** Poll até window.Hands e Camera estarem disponíveis. */
+      /** Poll ate window.Hands e Camera estarem disponiveis. */
       waitForMediaPipe() {
         const check = () => {
           if (window.Hands && window.Camera && window.drawConnectors) {
@@ -263,11 +306,10 @@
         check();
       },
 
-      /** Inicia câmera e envia cada frame para o modelo de mãos. */
+      /** Inicia camera e envia cada frame para o modelo de maos. */
       setupHands() {
         const hands = new window.Hands({
-          locateFile: (file) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
         hands.setOptions({
           maxNumHands: 2,
@@ -290,6 +332,7 @@
         this.camera = camera;
       },
 
+      /** Reinicia o jogo zerando pontuacao, vidas e estado. */
       start() {
         this.score = 0;
         this.lives = 5;
@@ -306,6 +349,7 @@
         document.getElementById("buffLabel").classList.remove("active");
       },
 
+      /** Encerra o jogo, exibe tela de fim de jogo e reseta o buff. */
       endGame() {
         this.gameOver = true;
         this.gameStarted = false;
@@ -317,11 +361,16 @@
         document.getElementById("canvasWrap").classList.remove("buff-border");
       },
 
+      /** Atualiza os valores de pontuacao e vidas no HUD. */
       updateHud() {
         document.getElementById("scoreDisplay").textContent = this.score;
-        document.getElementById("livesDisplay").textContent = "♥".repeat(Math.max(0, this.lives));
+        document.getElementById("livesDisplay").textContent = "".repeat(Math.max(0, this.lives));
       },
 
+      /**
+       * Ativa o buff dourado por 10 segundos:
+       * converte todas as bolinhas em douradas e dobra os pontos.
+       */
       activateBuff() {
         if (this.buff.active) return;
         this.buff.active = true;
@@ -329,6 +378,7 @@
         document.getElementById("buffLabel").classList.add("active");
         document.getElementById("hudPanel").classList.add("buff");
         document.getElementById("canvasWrap").classList.add("buff-border");
+        // Converte todas as bolinhas existentes em douradas
         this.circles.forEach((c) => {
           c.type = "gold";
           c.color = "rgba(255, 215, 0, 0.9)";
@@ -337,10 +387,12 @@
 
       /** Nova bolinha no topo (verde / vermelha / dourada). */
       spawnCircle(w) {
+        // Intervalo diminui conforme a pontuacao aumenta (minimo 400ms)
         const interval = Math.max(400, 1000 - Math.floor(this.score / 10) * 50);
         const now = performance.now();
         if (now - this.lastSpawn <= interval) return;
 
+        // Define o tipo da bolinha: 2% dourada, 70% verde, 28% vermelha
         let type = "score";
         if (this.buff.active) type = "gold";
         else {
@@ -352,9 +404,9 @@
 
         const radius = 25;
         const colors = {
-          score: "rgba(34, 197, 94, 0.8)",
-          killer: "rgba(239, 68, 68, 0.8)",
-          gold: "rgba(255, 215, 0, 0.9)",
+          score:  "rgba(34, 197, 94, 0.8)",   // verde
+          killer: "rgba(239, 68, 68, 0.8)",    // vermelho
+          gold:   "rgba(255, 215, 0, 0.9)",    // dourado
         };
         this.circles.push({
           x: Math.random() * (w - 2 * radius) + radius,
@@ -363,20 +415,24 @@
           color: colors[type],
           id: now,
           type,
+          // Velocidade aumenta a cada 50 pontos
           speed: 3 + Math.floor(this.score / 50) * 0.5,
         });
         this.lastSpawn = now;
       },
 
+      /** Desenha todas as bolinhas com rastro de gradiente. */
       drawCircles(ctx) {
         for (const c of this.circles) {
           ctx.save();
+          // Rastro acima da bolinha
           const trailLen = c.radius * 4;
           const grad = ctx.createLinearGradient(c.x, c.y, c.x, c.y - trailLen);
           grad.addColorStop(0, c.color);
           grad.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = grad;
           ctx.fillRect(c.x - c.radius, c.y - trailLen, c.radius * 2, trailLen);
+          // Corpo da bolinha com brilho
           ctx.beginPath();
           ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
           ctx.fillStyle = c.color;
@@ -390,8 +446,9 @@
         }
       },
 
-      /** Lógica por frame: buff, trilhas, colisão, vidas. */
+      /** Logica por frame: buff, trilhas do dedo, colisao e vidas. */
       updateLogic(ctx, w, h) {
+        // Gerencia o temporizador do buff dourado
         if (this.buff.active) {
           const rem = this.buff.endTime - performance.now();
           if (rem <= 0) {
@@ -400,12 +457,14 @@
             document.getElementById("hudPanel").classList.remove("buff");
             document.getElementById("canvasWrap").classList.remove("buff-border");
           } else {
+            // Atualiza o contador regressivo do buff
             document.getElementById("buffTime").textContent = Math.ceil(rem / 1000);
           }
         }
 
         this.spawnCircle(w);
 
+        // Coleta posicoes das pontas dos indicadores (landmark 8) de todas as maos
         const fingertips = [];
         if (this.multiHandLandmarks.length) {
           for (const landmarks of this.multiHandLandmarks) {
@@ -414,6 +473,7 @@
           }
         }
 
+        // Atualiza trilhas de cada mao (historico dos ultimos 20 pontos)
         this.trails = {};
         this.multiHandLandmarks.forEach((landmarks, i) => {
           const tip = landmarks[8];
@@ -424,6 +484,7 @@
           if (this.trails[i].length > 20) this.trails[i].shift();
         });
 
+        // Desenha as trilhas neon de cada mao
         Object.values(this.trails).forEach((trail) => {
           if (trail.length < 2) return;
           ctx.save();
@@ -438,12 +499,14 @@
           ctx.moveTo(trail[0].x, trail[0].y);
           for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
           ctx.stroke();
+          // Linha branca fina por cima para dar profundidade
           ctx.lineWidth = 6;
           ctx.strokeStyle = "white";
           ctx.stroke();
           ctx.restore();
         });
 
+        // Desenha ponto brilhante na ponta de cada dedo
         for (const tip of fingertips) {
           ctx.beginPath();
           ctx.arc(tip.x, tip.y, 10, 0, Math.PI * 2);
@@ -453,13 +516,16 @@
           ctx.fill();
         }
 
+        // Processa colisoes e bolinhas que saem da tela
         const surviving = [];
         for (const c of this.circles) {
           c.y += c.speed;
           let hit = false, off = false;
 
+          // Bolinha saiu pela parte inferior da tela
           if (c.y - c.radius > h) {
             off = true;
+            // Perde vida apenas se for verde e o buff nao estiver ativo
             if (c.type === "score" && !this.buff.active) {
               this.lives--;
               this.updateHud();
@@ -467,6 +533,7 @@
             }
           }
 
+          // Verifica colisao com algum dedo
           if (!off) {
             for (const tip of fingertips) {
               const dx = tip.x - c.x, dy = tip.y - c.y;
@@ -478,11 +545,16 @@
                 this.score += 20;
                 this.updateHud();
                 if (!this.buff.active) this.activateBuff();
-              } else if (!this.buff.active) { this.endGame(); return; }
+              } else if (!this.buff.active) {
+                // Tocou na vermelha sem buff: fim de jogo
+                this.endGame(); return;
+              }
             }
           }
 
+          // Mantem a bolinha se nao foi atingida nem saiu da tela
           if (!hit && !off) surviving.push(c);
+          // Bolinha vermelha atingida com buff ativo: permanece na tela
           else if (hit && c.type === "killer" && !this.buff.active) surviving.push(c);
         }
 
@@ -492,16 +564,18 @@
         }
       },
 
-      /** Desenha vídeo espelhado + landmarks + chama updateLogic se em jogo. */
+      /** Desenha video espelhado + landmarks + chama updateLogic se em jogo. */
       onResults(results) {
         const ctx = this.ctx;
         const w = this.canvas.width, h = this.canvas.height;
         ctx.save();
         ctx.clearRect(0, 0, w, h);
+        // Espelha o video horizontalmente (efeito de espelho)
         ctx.translate(w, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(results.image, 0, 0, w, h);
 
+        // Desenha o esqueleto das maos detectadas
         this.multiHandLandmarks = results.multiHandLandmarks || [];
         const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
         for (const landmarks of this.multiHandLandmarks) {
@@ -512,6 +586,7 @@
         }
         ctx.restore();
 
+        // Executa a logica do jogo ou apenas desenha as bolinhas (game over)
         if (this.gameStarted && !this.gameOver)
           this.updateLogic(ctx, w, h);
         else if (this.gameOver)
@@ -519,7 +594,7 @@
       },
     };
 
-    // Inicia ao carregar a página
+    // Inicia ao carregar a pagina
     game.init();
   </script>
 </body>
