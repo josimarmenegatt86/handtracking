@@ -1,3 +1,437 @@
+<!DOCTYPE html>
+<!--
+  posepong.html — Pose Pong standalone (HTML + CSS + JS + MediaPipe via CDN).
+  Controle o paddle com o movimento do seu corpo (ombros/pulsos).
+  Não precisa de npm/Next.js para rodar.
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pose Pong — Hand Tracking | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera e detecção de mãos -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Layout principal: cabeçalho fixo + área de jogo flexível */
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px;
+      border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0, 80, 120, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 251, 255, 0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0, 184, 212, 0.12); }
+
+    /* ── Área de jogo ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0;
+      overflow: hidden; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: #000;
+    }
+
+    /* Fundo com grade neon */
+    .grid-bg {
+      position: absolute; inset: 0; z-index: 0; opacity: 0.15; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* HUD de pontuação */
+    .hud {
+      position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; gap: 2rem;
+      padding: 0.6rem 2rem;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px;
+      font-family: monospace; font-size: 1.4rem; font-weight: 700;
+    }
+    .hud .p1 { color: #22d3ee; }
+    .hud .p2 { color: #f97316; }
+
+    /* Overlays (tela inicial e game over) */
+    .overlay {
+      position: absolute; inset: 0; z-index: 30;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.88); backdrop-filter: blur(12px);
+    }
+    .overlay.visible { display: flex; }
+    .modal {
+      padding: 2.5rem; border-radius: 1.5rem; text-align: center;
+      background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
+      max-width: 30rem; margin: 1rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .modal h1 {
+      font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; margin-bottom: 1rem;
+      background: linear-gradient(90deg, #22d3ee, #3b82f6, #9333ea);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .modal p { color: #d1d5db; margin-bottom: 0.6rem; line-height: 1.6; }
+    .modal .hint {
+      font-size: 0.85rem; color: #6b7280;
+      border-top: 1px solid #1f2937; padding-top: 1rem; margin-top: 1rem;
+    }
+    .btn-start {
+      margin-top: 1.5rem; padding: 0.9rem 2.5rem;
+      background: linear-gradient(90deg, #0891b2, #06b6d4);
+      color: #fff; font-weight: 700; font-size: 1.1rem;
+      border: none; border-radius: 9999px; cursor: pointer;
+      box-shadow: 0 0 20px rgba(8,145,178,0.5); letter-spacing: 0.08em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-start:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(6,182,212,0.7); }
+
+    /* Canvas do jogo */
+    #gameCanvas {
+      display: block; position: relative; z-index: 1;
+      max-width: 100%; max-height: 100%;
+    }
+
+    .footer-status {
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
+      color: #6b7280; font-size: 0.75rem; font-family: monospace; z-index: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão do projeto ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="../assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Pose Pong</span>
+      <span class="dev-role">Mova as mãos para cima e para baixo para controlar os paddles. Dois jogadores simultâneos.</span>
+    </div>
+    <a class="dev-back-link" href="../index.html">← Início</a>
+  </header>
+
+  <!-- ── Área principal do jogo ── -->
+  <div class="main-stage" id="mainStage">
+    <div class="grid-bg"></div>
+
+    <!-- HUD de pontuação -->
+    <div class="hud">
+      <span class="p1">P1: <span id="score1">0</span></span>
+      <span style="color:#555">|</span>
+      <span class="p2">P2: <span id="score2">0</span></span>
+    </div>
+
+    <!-- Tela inicial -->
+    <div class="overlay visible" id="overlayStart">
+      <div class="modal">
+        <div id="loader" style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+          <div style="width:4rem;height:4rem;border:4px solid rgba(6,182,212,0.3);border-top-color:#22d3ee;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+          <p style="color:#22d3ee;font-family:monospace;letter-spacing:0.1em">INICIALIZANDO...</p>
+        </div>
+        <div id="startContent" style="display:none">
+          <h1>POSE PONG</h1>
+          <p><strong style="color:#22d3ee">Mão esquerda</strong> controla o paddle esquerdo (P1).</p>
+          <p><strong style="color:#f97316">Mão direita</strong> controla o paddle direito (P2).</p>
+          <p>Mova a mão para cima e para baixo para rebater a bola.</p>
+          <p class="hint">Permita acesso à câmera · 1 ou 2 jogadores</p>
+          <button class="btn-start" type="button" id="btnStart">INICIAR JOGO</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de fim de jogo -->
+    <div class="overlay" id="overlayEnd">
+      <div class="modal">
+        <h1 id="winnerText">JOGADOR 1 VENCEU!</h1>
+        <p>Placar: <strong id="finalScore">0 × 0</strong></p>
+        <button class="btn-start" type="button" id="btnRetry">JOGAR DE NOVO</button>
+      </div>
+    </div>
+
+    <!-- Webcam oculta + canvas do jogo -->
+    <video id="video" playsinline hidden></video>
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <p class="footer-status">POSE PONG · ONLINE</p>
+  </div><!-- fim .main-stage -->
+
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script>
+    /**
+     * Pose Pong — jogo de Pong controlado pelas mãos via MediaPipe.
+     * Mão esquerda (label "Right" no MediaPipe espelhado) → paddle esquerdo (P1).
+     * Mão direita (label "Left" no MediaPipe espelhado) → paddle direito (P2).
+     */
+    const game = {
+      // ── Referências DOM ──
+      get canvas()  { return document.getElementById('gameCanvas'); },
+      get ctx()     { return this.canvas.getContext('2d'); },
+      get video()   { return document.getElementById('video'); },
+
+      // ── Estado do jogo ──
+      started: false,
+      score1: 0,   // P1 (paddle esquerdo)
+      score2: 0,   // P2 (paddle direito)
+      maxScore: 7, // Pontos para vencer
+
+      // ── Paddle ──
+      paddleW: 18, paddleH: 120,
+      paddle1Y: 300, paddle2Y: 300, // posição Y atual de cada paddle
+      targetY1: 300, targetY2: 300, // posição alvo (suavizada)
+
+      // ── Bola ──
+      ball: { x: 640, y: 360, vx: 6, vy: 4, r: 14 },
+
+      // ── Landmarks das mãos ──
+      multiHandLandmarks: [],
+      multiHandedness: [],
+
+      /** Inicializa botões e aguarda MediaPipe carregar. */
+      init() {
+        document.getElementById('btnStart').onclick  = () => this.start();
+        document.getElementById('btnRetry').onclick  = () => this.start();
+        this.waitForMediaPipe();
+      },
+
+      /** Aguarda window.Hands e Camera ficarem disponíveis. */
+      waitForMediaPipe() {
+        const check = () => {
+          if (window.Hands && window.Camera) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('startContent').style.display = 'block';
+            this.setupHands();
+          } else {
+            setTimeout(check, 200);
+          }
+        };
+        check();
+      },
+
+      /** Configura MediaPipe Hands e inicia a câmera. */
+      setupHands() {
+        const hands = new window.Hands({
+          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+        });
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.6,
+        });
+        hands.onResults((r) => this.onResults(r));
+
+        const cam = new window.Camera(this.video, {
+          onFrame: async () => { if (this.video && hands) await hands.send({ image: this.video }); },
+          width: 1280, height: 720,
+        });
+        cam.start();
+      },
+
+      /** Reinicia o jogo. */
+      start() {
+        this.score1 = 0; this.score2 = 0;
+        this.started = true;
+        this.resetBall(1);
+        this.updateHud();
+        document.getElementById('overlayStart').classList.remove('visible');
+        document.getElementById('overlayEnd').classList.remove('visible');
+      },
+
+      /** Atualiza o placar no HUD. */
+      updateHud() {
+        document.getElementById('score1').textContent = this.score1;
+        document.getElementById('score2').textContent = this.score2;
+      },
+
+      /** Reposiciona a bola no centro e define direção inicial. */
+      resetBall(dir) {
+        const c = this.canvas;
+        this.ball = {
+          x: c.width / 2, y: c.height / 2,
+          vx: (5 + Math.random() * 3) * dir,
+          vy: (Math.random() - 0.5) * 8,
+          r: 14
+        };
+      },
+
+      /** Exibe tela de fim de jogo. */
+      endGame(winner) {
+        this.started = false;
+        document.getElementById('winnerText').textContent =
+          winner === 1 ? 'JOGADOR 1 VENCEU! 🎉' : 'JOGADOR 2 VENCEU! 🎉';
+        document.getElementById('finalScore').textContent =
+          `${this.score1} × ${this.score2}`;
+        document.getElementById('overlayEnd').classList.add('visible');
+      },
+
+      /** Callback principal do MediaPipe — executado a cada frame. */
+      onResults(results) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+
+        // Desenha o vídeo espelhado como fundo
+        ctx.save();
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(results.image, 0, 0, w, h);
+        ctx.restore();
+
+        // Escurece levemente para destacar os elementos do jogo
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, 0, w, h);
+
+        this.multiHandLandmarks = results.multiHandLandmarks || [];
+        this.multiHandedness    = results.multiHandedness    || [];
+
+        // Atualiza posição alvo dos paddles com base nas mãos detectadas
+        this.multiHandLandmarks.forEach((landmarks, i) => {
+          const label = this.multiHandedness[i]?.label;
+          // Pulso (landmark 0) define a altura do paddle
+          const wristY = landmarks[0].y * h;
+          if (label === 'Right') {
+            // Mão direita do usuário = lado esquerdo espelhado = P1
+            this.targetY1 = wristY;
+          } else {
+            // Mão esquerda do usuário = lado direito espelhado = P2
+            this.targetY2 = wristY;
+          }
+        });
+
+        if (this.started) this.updateLogic(ctx, w, h);
+        else              this.drawScene(ctx, w, h);
+      },
+
+      /** Lógica de física e colisão por frame. */
+      updateLogic(ctx, w, h) {
+        const pw = this.paddleW, ph = this.paddleH;
+
+        // Suaviza movimento dos paddles (lerp)
+        this.paddle1Y += (this.targetY1 - this.paddle1Y) * 0.18;
+        this.paddle2Y += (this.targetY2 - this.paddle2Y) * 0.18;
+
+        // Limita paddles dentro da tela
+        this.paddle1Y = Math.max(ph / 2, Math.min(h - ph / 2, this.paddle1Y));
+        this.paddle2Y = Math.max(ph / 2, Math.min(h - ph / 2, this.paddle2Y));
+
+        // Move a bola
+        const b = this.ball;
+        b.x += b.vx; b.y += b.vy;
+
+        // Rebate nas paredes superior e inferior
+        if (b.y - b.r < 0)  { b.y = b.r;      b.vy *= -1; }
+        if (b.y + b.r > h)  { b.y = h - b.r;  b.vy *= -1; }
+
+        // Colisão com paddle esquerdo (P1)
+        const p1x = pw + 10;
+        if (b.x - b.r < p1x + pw / 2 && b.vx < 0 &&
+            b.y > this.paddle1Y - ph / 2 && b.y < this.paddle1Y + ph / 2) {
+          b.x = p1x + pw / 2 + b.r;
+          b.vx = Math.abs(b.vx) * 1.05; // leve aceleração a cada rebatida
+          b.vy += (b.y - this.paddle1Y) * 0.1;
+        }
+
+        // Colisão com paddle direito (P2)
+        const p2x = w - pw - 10;
+        if (b.x + b.r > p2x - pw / 2 && b.vx > 0 &&
+            b.y > this.paddle2Y - ph / 2 && b.y < this.paddle2Y + ph / 2) {
+          b.x = p2x - pw / 2 - b.r;
+          b.vx = -Math.abs(b.vx) * 1.05;
+          b.vy += (b.y - this.paddle2Y) * 0.1;
+        }
+
+        // Limita velocidade máxima da bola
+        const maxV = 18;
+        b.vx = Math.max(-maxV, Math.min(maxV, b.vx));
+        b.vy = Math.max(-maxV, Math.min(maxV, b.vy));
+
+        // Ponto para P2 (bola saiu pela esquerda)
+        if (b.x + b.r < 0) {
+          this.score2++;
+          this.updateHud();
+          if (this.score2 >= this.maxScore) { this.endGame(2); return; }
+          this.resetBall(1);
+        }
+
+        // Ponto para P1 (bola saiu pela direita)
+        if (b.x - b.r > w) {
+          this.score1++;
+          this.updateHud();
+          if (this.score1 >= this.maxScore) { this.endGame(1); return; }
+          this.resetBall(-1);
+        }
+
+        this.drawScene(ctx, w, h);
+      },
+
+      /** Desenha paddles, bola e linha central. */
+      drawScene(ctx, w, h) {
+        const pw = this.paddleW, ph = this.paddleH;
+
+        // Linha central tracejada
+        ctx.save();
+        ctx.setLineDash([20, 15]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 0);
+        ctx.lineTo(w / 2, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // Paddle P1 (esquerdo — ciano)
+        ctx.save();
+        ctx.shadowBlur = 20; ctx.shadowColor = '#22d3ee';
+        ctx.fillStyle = '#22d3ee';
+        ctx.beginPath();
+        ctx.roundRect(pw + 10 - pw / 2, this.paddle1Y - ph / 2, pw, ph, 6);
+        ctx.fill();
+        ctx.restore();
+
         // Paddle P2 (direito — laranja)
         ctx.save();
         ctx.shadowBlur = 20; ctx.shadowColor = '#f97316';
