@@ -271,7 +271,7 @@
         cam.start();
       },
 
-      /** Reinicia o jogo zerando placar, bola e estado. */
+      /** Reinicia o jogo. */
       start() {
         this.score1 = 0; this.score2 = 0;
         this.started = true;
@@ -299,8 +299,8 @@
       },
 
       /** Exibe tela de fim de jogo. */
-      /** Exibe a tela de fim de jogo com o vencedor e placar final. */
       endGame(winner) {
+        this.started = false;
         document.getElementById('winnerText').textContent =
           winner === 1 ? 'JOGADOR 1 VENCEU! 🎉' : 'JOGADOR 2 VENCEU! 🎉';
         document.getElementById('finalScore').textContent =
@@ -309,11 +309,11 @@
       },
 
       /** Callback principal do MediaPipe — executado a cada frame. */
-      /**
-       * Callback principal do MediaPipe — executado a cada frame da câmera.
-       * Desenha o vídeo espelhado, atualiza posição dos paddles e chama a lógica.
-       */
       onResults(results) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+
+        // Desenha o vídeo espelhado como fundo
         ctx.save();
         ctx.translate(w, 0);
         ctx.scale(-1, 1);
