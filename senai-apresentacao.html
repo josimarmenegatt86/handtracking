@@ -341,7 +341,10 @@
       navDots.appendChild(dot);
     });
 
-    /** Navega para o slide de índice `idx` com animação de flash. */
+    /**
+     * Navega para o slide de índice `idx` com animação de flash.
+     * Atualiza o ponto de navegação ativo e a barra de progresso.
+     */
     function irParaSlide(idx) {
       if (idx < 0 || idx >= TOTAL || idx === slideAtual) return;
       slides[slideAtual].classList.remove('active');
@@ -395,7 +398,11 @@
     let wasOpen      = false;
     let gestoCooldown = 0; // frames de espera entre gestos (evita troca rápida demais)
 
-    /** Detecta punho (3+ dedos dobrados). */
+    /**
+     * Detecta punho: 3 ou mais dedos dobrados abaixo das articulações.
+     * @param {Array} lm - landmarks da mão (21 pontos MediaPipe)
+     * @returns {boolean}
+     */
     function isFist(lm) {
       const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
       let n = 0;
@@ -403,7 +410,11 @@
       return n >= 3;
     }
 
-    /** Detecta mão aberta (4 dedos estendidos). */
+    /**
+     * Detecta mão completamente aberta: todos os 4 dedos estendidos.
+     * @param {Array} lm - landmarks da mão
+     * @returns {boolean}
+     */
     function isOpen(lm) {
       const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
       let n = 0;
@@ -411,7 +422,10 @@
       return n >= 4;
     }
 
-    /** Callback principal do MediaPipe. */
+    /**
+     * Callback principal do MediaPipe — executado a cada frame.
+     * Atualiza a miniatura da câmera, move o cursor e detecta gestos de navegação.
+     */
     function onResults(results) {
       // Atualiza miniatura da câmera
       camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
@@ -482,7 +496,10 @@
       width: 1280, height: 720,
     });
 
-    // ── Redimensionamento ──
+    /**
+     * Redimensiona os canvas ao mudar o tamanho da janela.
+     * O canvas de fundo usa o tamanho total; a miniatura da câmera é fixa.
+     */
     function resize() {
       const w = stageEl.clientWidth, h = stageEl.clientHeight;
       bgCanvas.width  = w; bgCanvas.height  = h;

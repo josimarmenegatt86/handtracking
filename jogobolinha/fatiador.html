@@ -326,11 +326,8 @@
         this.camera = camera;
       },
 
+      /** Reinicia o jogo zerando pontuação, vidas e estado. */
       start() {
-        this.score = 0;
-        this.lives = 5;
-        this.gameOver = false;
-        this.gameStarted = true;
         this.circles = [];
         this.lastSpawn = performance.now();
         this.buff = { active: false, endTime: 0 };
@@ -342,10 +339,8 @@
         document.getElementById("buffLabel").classList.remove("active");
       },
 
+      /** Encerra o jogo, exibe tela de game over e reseta o buff. */
       endGame() {
-        this.gameOver = true;
-        this.gameStarted = false;
-        this.buff.active = false;
         document.getElementById("finalScore").textContent = this.score;
         document.getElementById("overlayGameOver").classList.add("visible");
         document.getElementById("buffLabel").classList.remove("active");
@@ -353,13 +348,15 @@
         document.getElementById("canvasWrap").classList.remove("buff-border");
       },
 
+      /** Atualiza os valores de pontuação e vidas no HUD. */
       updateHud() {
-        document.getElementById("scoreDisplay").textContent = this.score;
-        document.getElementById("livesDisplay").textContent = "♥".repeat(Math.max(0, this.lives));
       },
 
+      /**
+       * Ativa o buff dourado por 10 segundos:
+       * converte todas as bolinhas em douradas e dobra os pontos.
+       */
       activateBuff() {
-        if (this.buff.active) return;
         this.buff.active = true;
         this.buff.endTime = performance.now() + 10000;
         document.getElementById("buffLabel").classList.add("active");

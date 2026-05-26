@@ -249,23 +249,11 @@
         check();
       },
 
+      /**
+       * Configura o MediaPipe Hands e inicia a câmera.
+       * Aguarda window.Hands e Camera estarem disponíveis antes de iniciar.
+       */
       setupHands() {
-        const hands = new window.Hands({
-          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-        });
-        hands.setOptions({
-          maxNumHands: 2, modelComplexity: 1,
-          minDetectionConfidence: 0.6, minTrackingConfidence: 0.6,
-        });
-        hands.onResults((r) => this.onResults(r));
-
-        const cam = new window.Camera(this.video, {
-          onFrame: async () => { if (this.video && hands) await hands.send({ image: this.video }); },
-          width: 1280, height: 720,
-        });
-        cam.start();
-      },
-
       start() {
         this.score = 0; this.combo = 1; this.maxCombo = 1; this.lives = 3;
         this.circles = []; this.lastSpawn = performance.now();
@@ -282,6 +270,7 @@
         document.getElementById('livesDisplay').textContent = '♥'.repeat(Math.max(0, this.lives));
       },
 
+      /** Encerra o jogo e exibe a tela de fim. */
       endGame() {
         this.started = false;
         document.getElementById('finalScore').textContent = this.score;

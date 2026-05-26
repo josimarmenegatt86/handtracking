@@ -243,7 +243,11 @@
     let handPos      = new THREE.Vector3(); // posição 3D da palma
     let autoTimer    = null;               // timer para ciclo automático de texto
 
-    /** Detecta punho: 3+ dedos dobrados. */
+    /**
+     * Detecta punho: 3+ dedos dobrados comparando distância da ponta ao pulso.
+     * @param {Array} lm - landmarks da mão
+     * @returns {boolean}
+     */
     function isFist(lm) {
       const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
       let n = 0;
@@ -251,7 +255,10 @@
       return n >= 3;
     }
 
-    /** Avança para o próximo texto do ciclo. */
+    /**
+     * Avança para o próximo texto do ciclo e reconstrói os alvos das partículas.
+     * Chamado automaticamente a cada 8s ou ao fechar o punho.
+     */
     function proximoTexto() {
       textoIdx = (textoIdx + 1) % TEXTOS.length;
       buildTextTargets(TEXTOS[textoIdx]);
@@ -269,7 +276,10 @@
     }
     iniciarCicloAuto();
 
-    // ── Loop de animação Three.js ──
+    /**
+     * Loop de animação Three.js — executado a cada frame via requestAnimationFrame.
+     * Aplica lerp nas posições, amortece velocidades residuais e rotaciona o conjunto.
+     */
     function animate() {
       requestAnimationFrame(animate);
 
@@ -303,7 +313,10 @@
       renderer.render(scene, camera3d);
     }
 
-    // ── Callback MediaPipe ──
+    /**
+     * Callback principal do MediaPipe — executado a cada frame da câmera.
+     * Atualiza o canvas de fundo, detecta gestos e controla explosão/reagrupamento.
+     */
     function onResults(results) {
       // Desenha o vídeo no canvas de fundo (espelhado via CSS)
       camCanvas.width  = stageEl.clientWidth;
@@ -358,7 +371,10 @@
       width: 1280, height: 720,
     });
 
-    // ── Redimensionamento ──
+    /**
+     * Redimensiona o renderer e atualiza o aspect ratio da câmera 3D
+     * ao mudar o tamanho da janela.
+     */
     function resize() {
       const w = stageEl.clientWidth, h = stageEl.clientHeight;
       camera3d.aspect = w / h;

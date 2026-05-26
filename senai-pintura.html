@@ -189,7 +189,12 @@
     // ── Partículas de explosão (limpeza) ──
     let sparks = [];
 
-    /** Verifica se o indicador está levantado e os demais fechados (gesto de desenho). */
+    /**
+     * Verifica se o indicador está levantado e os demais fechados.
+     * Gesto de desenho: indicador para cima, médio e anelar para baixo.
+     * @param {Array} lm - landmarks da mão
+     * @returns {boolean}
+     */
     function isIndexUp(lm) {
       const indexUp  = lm[8].y < lm[6].y;
       const middleDown = lm[12].y > lm[10].y;
@@ -197,7 +202,11 @@
       return indexUp && middleDown && ringDown;
     }
 
-    /** Detecta punho fechado (3+ dedos dobrados). */
+    /**
+     * Detecta punho fechado: 3+ dedos com ponta mais próxima do pulso que a articulação.
+     * @param {Array} lm - landmarks da mão
+     * @returns {boolean}
+     */
     function isFist(lm) {
       const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
       let n = 0;
@@ -205,7 +214,10 @@
       return n >= 3;
     }
 
-    /** Limpa o canvas de desenho com efeito de explosão de partículas. */
+    /**
+     * Limpa o canvas de desenho com efeito visual de explosão de partículas coloridas.
+     * Cria 60 elementos DOM animados e os remove após 700ms.
+     */
     function limparTela() {
       // Cria partículas espalhadas pela tela
       for (let i = 0; i < 60; i++) {
@@ -235,7 +247,10 @@
     // Controle de limpeza por punho (evita limpar múltiplas vezes no mesmo gesto)
     let fistLimpou = false;
 
-    /** Callback principal do MediaPipe — executado a cada frame. */
+    /**
+     * Callback principal do MediaPipe — executado a cada frame da câmera.
+     * Atualiza os 3 canvas (fundo, desenho, UI) e processa cada mão detectada.
+     */
     function onResults(results) {
       const w = stageEl.clientWidth, h = stageEl.clientHeight;
 
@@ -337,6 +352,7 @@
     cam.start();
 
     // Redimensiona canvas ao mudar o tamanho da janela
+    // Preserva o desenho existente copiando para um canvas temporário antes de redimensionar
     window.addEventListener('resize', () => {
       const w = stageEl.clientWidth, h = stageEl.clientHeight;
       // Preserva o desenho ao redimensionar copiando para um canvas temporário
