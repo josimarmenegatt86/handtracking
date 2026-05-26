@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<!--
+  senai-apresentacao.html — Apresentação Interativa de Curso
+  Slides controlados por gestos: punho = próximo, mão aberta = voltar.
+  Indicador aponta para destacar elementos. Fundo de partículas animado.
+  Mundo SENAI · Josimar Menegatt
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apresentação Interativa — Mundo SENAI | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera e detecção de mãos -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; overflow: hidden; background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px; border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0,80,120,0.08);
+      display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+      border: 2px solid #00d4ff; box-shadow: 0 0 12px rgba(0,251,255,0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0,184,212,0.12); }
+
+    /* ── Área principal ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0; overflow: hidden;
+      background: radial-gradient(ellipse at 50% 0%, rgba(0,61,165,0.25) 0%, #000 60%);
+    }
+
+    /* Canvas de fundo: partículas animadas */
+    #bg-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* Canvas da câmera (canto inferior direito — miniatura) */
+    #cam-canvas {
+      position: absolute; bottom: 20px; right: 20px;
+      width: 220px; height: 124px; border-radius: 10px;
+      border: 2px solid rgba(0,212,255,0.4);
+      transform: scaleX(-1); /* espelho */
+      z-index: 10; opacity: 0.85;
+    }
+
+    /* Vídeo oculto */
+    #input_video { display: none; }
+
+    /* ── Área dos slides ── */
+    #slide-area {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Slide individual */
+    .slide {
+      display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 40px 60px;
+      max-width: 900px; width: 90%;
+      animation: slideIn 0.5s ease-out;
+    }
+    .slide.active { display: flex; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(30px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)   scale(1); }
+    }
+
+    /* Número do slide */
+    .slide-num {
+      font-size: 11px; font-family: monospace; letter-spacing: 3px;
+      color: rgba(0,212,255,0.5); margin-bottom: 20px;
+    }
+
+    /* Ícone/emoji grande do slide */
+    .slide-icon {
+      font-size: clamp(3rem, 8vw, 6rem);
+      margin-bottom: 20px; line-height: 1;
+      filter: drop-shadow(0 0 20px rgba(0,212,255,0.6));
+    }
+
+    /* Título principal do slide */
+    .slide-title {
+      font-size: clamp(1.8rem, 4vw, 3.2rem);
+      font-weight: 900; line-height: 1.15;
+      color: #ffffff;
+      text-shadow: 0 0 30px rgba(0,212,255,0.5);
+      margin-bottom: 16px;
+    }
+
+    /* Destaque em azul SENAI */
+    .slide-title span {
+      color: #00d4ff;
+      text-shadow: 0 0 20px rgba(0,212,255,0.8);
+    }
+
+    /* Subtítulo / descrição */
+    .slide-sub {
+      font-size: clamp(1rem, 2vw, 1.4rem);
+      color: rgba(255,255,255,0.7);
+      line-height: 1.6; max-width: 700px;
+    }
+
+    /* Lista de itens do slide */
+    .slide-list {
+      list-style: none; padding: 0; margin: 20px 0 0;
+      display: flex; flex-direction: column; gap: 10px;
+      text-align: left; width: 100%; max-width: 600px;
+    }
+    .slide-list li {
+      font-size: clamp(0.95rem, 1.8vw, 1.2rem);
+      color: rgba(255,255,255,0.8);
+      padding: 10px 16px;
+      background: rgba(0,212,255,0.06);
+      border-left: 3px solid #00d4ff;
+      border-radius: 0 8px 8px 0;
+      transition: background 0.2s;
+    }
+    .slide-list li.highlight {
+      background: rgba(0,212,255,0.18);
+      color: #fff;
+    }
+
+    /* ── Barra de progresso dos slides ── */
+    #progress-bar {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 3px; background: rgba(255,255,255,0.08); z-index: 20;
+    }
+    #progress-fill {
+      height: 100%; background: linear-gradient(90deg, #003DA5, #00d4ff);
+      transition: width 0.4s ease;
+    }
+
+    /* ── Indicadores de navegação ── */
+    #nav-dots {
+      position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 20;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.25); transition: all 0.3s;
+    }
+    .dot.active {
+      background: #00d4ff;
+      box-shadow: 0 0 8px #00d4ff;
+      transform: scale(1.3);
+    }
+
+    /* ── Dica de gesto ── */
+    #gesto-hint {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; font-family: monospace; letter-spacing: 2px;
+      color: rgba(255,255,255,0.4); z-index: 20; pointer-events: none;
+      transition: opacity 0.4s;
+    }
+
+    /* ── Cursor do indicador ── */
+    #cursor {
+      position: absolute; width: 28px; height: 28px;
+      border: 2px solid #00d4ff; border-radius: 50%;
+      box-shadow: 0 0 12px #00d4ff;
+      pointer-events: none; z-index: 30;
+      transform: translate(-50%, -50%);
+      transition: left 0.05s, top 0.05s;
+      display: none;
+    }
+    #cursor::after {
+      content: ''; position: absolute; inset: 4px;
+      background: rgba(0,212,255,0.4); border-radius: 50%;
+    }
+
+    /* Flash de transição de slide */
+    #flash {
+      position: absolute; inset: 0; z-index: 25;
+      background: rgba(0,212,255,0.15);
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.15s;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Apresentação Interativa</span>
+      <span class="dev-role">Punho fecha → próximo slide · Mão aberta → slide anterior · Indicador aponta elementos.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <!-- ── Área de jogo ── -->
+  <div class="main-stage" id="main-stage">
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="cam-canvas"></canvas>
+    <video id="input_video" playsinline></video>
+
+    <!-- Cursor do indicador -->
+    <div id="cursor"></div>
+
+    <!-- Flash de transição -->
+    <div id="flash"></div>
+
+    <!-- Dica de gesto -->
+    <div id="gesto-hint">PUNHO → PRÓXIMO · MÃO ABERTA → VOLTAR</div>
+
+    <!-- ── SLIDES ── Edite aqui o conteúdo da apresentação ── -->
+    <div id="slide-area">
+
+      <!-- Slide 1: Capa -->
+      <div class="slide active" id="slide-0">
+        <div class="slide-num">01 / 06</div>
+        <div class="slide-icon">🏭</div>
+        <h1 class="slide-title"><span>MUNDO SENAI</span> 2025</h1>
+        <p class="slide-sub">Inovação, tecnologia e educação profissional.<br>Controle esta apresentação com as mãos.</p>
+      </div>
+
+      <!-- Slide 2: O que é o SENAI -->
+      <div class="slide" id="slide-1">
+        <div class="slide-num">02 / 06</div>
+        <div class="slide-icon">🎓</div>
+        <h1 class="slide-title">O que é o <span>SENAI</span>?</h1>
+        <ul class="slide-list">
+          <li>Serviço Nacional de Aprendizagem Industrial</li>
+          <li>Maior rede de educação profissional do Brasil</li>
+          <li>Mais de 80 anos formando profissionais</li>
+          <li>Presente em todos os estados brasileiros</li>
+        </ul>
+      </div>
+
+      <!-- Slide 3: Tecnologia -->
+      <div class="slide" id="slide-2">
+        <div class="slide-num">03 / 06</div>
+        <div class="slide-icon">💻</div>
+        <h1 class="slide-title">Tecnologia na <span>Prática</span></h1>
+        <p class="slide-sub">Esta apresentação usa <strong style="color:#00d4ff">Inteligência Artificial</strong> e <strong style="color:#00d4ff">Visão Computacional</strong> para detectar seus gestos em tempo real.</p>
+        <ul class="slide-list">
+          <li>MediaPipe — rastreamento de mãos do Google</li>
+          <li>JavaScript — linguagem da web</li>
+          <li>HTML5 Canvas — renderização em tempo real</li>
+        </ul>
+      </div>
+
+      <!-- Slide 4: Cursos -->
+      <div class="slide" id="slide-3">
+        <div class="slide-num">04 / 06</div>
+        <div class="slide-icon">📚</div>
+        <h1 class="slide-title">Nossos <span>Cursos</span></h1>
+        <ul class="slide-list">
+          <li>Desenvolvimento de Sistemas</li>
+          <li>Automação Industrial</li>
+          <li>Eletrotécnica</li>
+          <li>Mecânica e Mecatrônica</li>
+          <li>Design Gráfico e Multimídia</li>
+        </ul>
+      </div>
+
+      <!-- Slide 5: Inovação -->
+      <div class="slide" id="slide-4">
+        <div class="slide-num">05 / 06</div>
+        <div class="slide-icon">🚀</div>
+        <h1 class="slide-title">Inovação <span>sem Limites</span></h1>
+        <p class="slide-sub">No SENAI você aprende fazendo. Laboratórios modernos, projetos reais e professores especialistas do mercado.</p>
+      </div>
+
+      <!-- Slide 6: Encerramento -->
+      <div class="slide" id="slide-5">
+        <div class="slide-num">06 / 06</div>
+        <div class="slide-icon">🤝</div>
+        <h1 class="slide-title">Venha fazer parte do <span>SENAI</span>!</h1>
+        <p class="slide-sub">Matricule-se e construa o futuro com a gente.<br><strong style="color:#00d4ff">senai.br</strong></p>
+      </div>
+
+    </div><!-- fim #slide-area -->
+
+    <!-- Barra de progresso -->
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+
+    <!-- Pontos de navegação -->
+    <div id="nav-dots"></div>
+
+  </div><!-- fim .main-stage -->
+
+  <script>
+    // ── Referências DOM ──
+    const stageEl   = document.getElementById('main-stage');
+    const bgCanvas  = document.getElementById('bg-canvas');
+    const bgCtx     = bgCanvas.getContext('2d');
+    const camCanvas = document.getElementById('cam-canvas');
+    const camCtx    = camCanvas.getContext('2d');
+    const videoEl   = document.getElementById('input_video');
+    const cursorEl  = document.getElementById('cursor');
+    const flashEl   = document.getElementById('flash');
+    const gestoEl   = document.getElementById('gesto-hint');
+    const progressFill = document.getElementById('progress-fill');
+    const navDots   = document.getElementById('nav-dots');
+
+    // ── Slides ──
+    const slides     = document.querySelectorAll('.slide');
+    const TOTAL      = slides.length;
+    let   slideAtual = 0;
+
+    // Cria os pontos de navegação dinamicamente
+    slides.forEach((_, i) => {
+      const dot = document.createElement('div');
+      dot.className = 'dot' + (i === 0 ? ' active' : '');
+      navDots.appendChild(dot);
+    });
+
+    /** Navega para o slide de índice `idx` com animação de flash. */
+    function irParaSlide(idx) {
+      if (idx < 0 || idx >= TOTAL || idx === slideAtual) return;
+      slides[slideAtual].classList.remove('active');
+      document.querySelectorAll('.dot')[slideAtual].classList.remove('active');
+      slideAtual = idx;
+      slides[slideAtual].classList.add('active');
+      document.querySelectorAll('.dot')[slideAtual].classList.add('active');
+      progressFill.style.width = `${((slideAtual + 1) / TOTAL) * 100}%`;
+      // Flash de transição
+      flashEl.style.opacity = '1';
+      setTimeout(() => { flashEl.style.opacity = '0'; }, 150);
+    }
+
+    // Inicializa barra de progresso
+    progressFill.style.width = `${(1 / TOTAL) * 100}%`;
+
+    // ── Controle por teclado (fallback) ──
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') irParaSlide(slideAtual + 1);
+      if (e.key === 'ArrowLeft')                   irParaSlide(slideAtual - 1);
+    });
+
+    // ── Partículas de fundo ──
+    const PART_COUNT = 120;
+    const bgParticles = Array.from({ length: PART_COUNT }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.5 + Math.random() * 1.5,
+      vx: (Math.random() - 0.5) * 0.0003,
+      vy: -0.0001 - Math.random() * 0.0003,
+      alpha: 0.2 + Math.random() * 0.5,
+    }));
+
+    /** Desenha e anima as partículas de fundo. */
+    function animateBg() {
+      requestAnimationFrame(animateBg);
+      const w = bgCanvas.width, h = bgCanvas.height;
+      bgCtx.clearRect(0, 0, w, h);
+      for (const p of bgParticles) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.y < -0.01) { p.y = 1.01; p.x = Math.random(); }
+        bgCtx.beginPath();
+        bgCtx.arc(p.x * w, p.y * h, p.r, 0, Math.PI * 2);
+        bgCtx.fillStyle = `rgba(0,212,255,${p.alpha})`;
+        bgCtx.fill();
+      }
+    }
+
+    // ── Estado de gestos ──
+    let wasFist      = false;
+    let wasOpen      = false;
+    let gestoCooldown = 0; // frames de espera entre gestos (evita troca rápida demais)
+
+    /** Detecta punho (3+ dedos dobrados). */
+    function isFist(lm) {
+      const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+      let n = 0;
+      for (let i = 0; i < 4; i++) if (lm[tips[i]].y > lm[pips[i]].y) n++;
+      return n >= 3;
+    }
+
+    /** Detecta mão aberta (4 dedos estendidos). */
+    function isOpen(lm) {
+      const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+      let n = 0;
+      for (let i = 0; i < 4; i++) if (lm[tips[i]].y < lm[pips[i]].y) n++;
+      return n >= 4;
+    }
+
+    /** Callback principal do MediaPipe. */
+    function onResults(results) {
+      // Atualiza miniatura da câmera
+      camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
+
+      if (gestoCooldown > 0) { gestoCooldown--; return; }
+
+      const lms = results.multiHandLandmarks || [];
+
+      if (lms.length > 0) {
+        const lm   = lms[0];
+        const fist = isFist(lm);
+        const open = isOpen(lm);
+
+        // Posição do indicador → move o cursor na tela
+        const tip = lm[8];
+        const cx  = (1 - tip.x) * stageEl.clientWidth;
+        const cy  = tip.y * stageEl.clientHeight;
+        cursorEl.style.display = 'block';
+        cursorEl.style.left    = cx + 'px';
+        cursorEl.style.top     = cy + 'px';
+
+        // Destaca itens da lista que o cursor está sobre
+        document.querySelectorAll('.slide-list li').forEach(li => {
+          const rect = li.getBoundingClientRect();
+          const stageRect = stageEl.getBoundingClientRect();
+          const lx = cx + stageRect.left;
+          const ly = cy + stageRect.top;
+          li.classList.toggle('highlight',
+            lx >= rect.left && lx <= rect.right && ly >= rect.top && ly <= rect.bottom
+          );
+        });
+
+        // Punho fechado → próximo slide
+        if (fist && !wasFist) {
+          irParaSlide(slideAtual + 1);
+          gestoCooldown = 25; // ~0.8s de cooldown
+        }
+
+        // Mão aberta → slide anterior
+        if (open && !wasOpen && !fist) {
+          irParaSlide(slideAtual - 1);
+          gestoCooldown = 25;
+        }
+
+        wasFist = fist;
+        wasOpen = open;
+        gestoEl.style.opacity = '0.3';
+      } else {
+        cursorEl.style.display = 'none';
+        wasFist = false; wasOpen = false;
+        gestoEl.style.opacity = '1';
+        document.querySelectorAll('.slide-list li').forEach(li => li.classList.remove('highlight'));
+      }
+    }
+
+    // ── Inicialização MediaPipe ──
+    const hands = new Hands({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({
+      maxNumHands: 1, modelComplexity: 1,
+      minDetectionConfidence: 0.7, minTrackingConfidence: 0.7,
+    });
+    hands.onResults(onResults);
+
+    const cam = new Camera(videoEl, {
+      onFrame: async () => { await hands.send({ image: videoEl }); },
+      width: 1280, height: 720,
+    });
+
+    // ── Redimensionamento ──
+    function resize() {
+      const w = stageEl.clientWidth, h = stageEl.clientHeight;
+      bgCanvas.width  = w; bgCanvas.height  = h;
+      camCanvas.width = 220; camCanvas.height = 124;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // ── Inicia ──
+    cam.start();
+    animateBg();
+  </script>
+</body>
+</html>

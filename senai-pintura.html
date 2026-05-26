@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<!--
+  senai-pintura.html — Pintura Colaborativa ao Vivo
+  Até 4 mãos simultâneas, cada uma com cor diferente.
+  Indicador levantado desenha. Punho limpa a tela com explosão.
+  Mundo SENAI · Josimar Menegatt
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pintura Colaborativa — Mundo SENAI | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera, detecção de mãos e utilitários de desenho -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; overflow: hidden; background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px; border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0,80,120,0.08);
+      display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+      border: 2px solid #00d4ff; box-shadow: 0 0 12px rgba(0,251,255,0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0,184,212,0.12); }
+
+    /* ── Área principal ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000;
+    }
+
+    /* Canvas de fundo: vídeo da câmera (espelhado) */
+    #cam-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      transform: scaleX(-1); opacity: 0.22;
+    }
+
+    /* Canvas de desenho persistente (traços ficam entre frames) */
+    #draw-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      transform: scaleX(-1); /* espelha para coincidir com a câmera */
+    }
+
+    /* Canvas de UI: esqueleto das mãos (redesenhado a cada frame) */
+    #ui-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      transform: scaleX(-1);
+    }
+
+    /* Vídeo oculto — alimenta o MediaPipe */
+    #input_video { display: none; }
+
+    /* Painel de legenda de cores das mãos */
+    #legenda {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 16px; z-index: 20; pointer-events: none;
+    }
+    .legenda-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-family: monospace; letter-spacing: 1px;
+      color: rgba(255,255,255,0.7);
+    }
+    .legenda-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Botão de limpar tela */
+    #btn-limpar {
+      position: absolute; top: 14px; right: 16px; z-index: 30;
+      padding: 8px 18px; background: rgba(255,50,50,0.15);
+      color: #ff6666; border: 1px solid rgba(255,80,80,0.4);
+      border-radius: 8px; cursor: pointer; font-size: 12px;
+      font-weight: 600; letter-spacing: 1px; transition: background 0.15s;
+    }
+    #btn-limpar:hover { background: rgba(255,50,50,0.5); color: #fff; }
+
+    /* Contador de mãos ativas */
+    #contador {
+      position: absolute; top: 14px; left: 16px; z-index: 30;
+      font-size: 12px; font-family: monospace; letter-spacing: 2px;
+      color: rgba(255,255,255,0.5); pointer-events: none;
+    }
+
+    /* Partículas de explosão ao limpar */
+    .spark {
+      position: absolute; border-radius: 50%; pointer-events: none;
+      animation: sparkFly 0.7s ease-out forwards;
+    }
+    @keyframes sparkFly {
+      0%   { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0) translate(var(--tx), var(--ty)); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Pintura Colaborativa</span>
+      <span class="dev-role">Levante o indicador para desenhar. Cada mão tem uma cor. Punho fecha = limpa a tela com explosão.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <!-- ── Área de jogo ── -->
+  <div class="main-stage" id="main-stage">
+    <canvas id="cam-canvas"></canvas>
+    <canvas id="draw-canvas"></canvas>
+    <canvas id="ui-canvas"></canvas>
+    <video id="input_video" playsinline></video>
+
+    <!-- Botão de limpar -->
+    <button type="button" id="btn-limpar">✕ LIMPAR</button>
+
+    <!-- Contador de mãos -->
+    <div id="contador">0 MÃO(S) ATIVA(S)</div>
+
+    <!-- Legenda de cores -->
+    <div id="legenda">
+      <div class="legenda-item">
+        <div class="legenda-dot" style="background:#00fbff;color:#00fbff"></div> MÃO 1
+      </div>
+      <div class="legenda-item">
+        <div class="legenda-dot" style="background:#ff6b35;color:#ff6b35"></div> MÃO 2
+      </div>
+      <div class="legenda-item">
+        <div class="legenda-dot" style="background:#a855f7;color:#a855f7"></div> MÃO 3
+      </div>
+      <div class="legenda-item">
+        <div class="legenda-dot" style="background:#4ade80;color:#4ade80"></div> MÃO 4
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Referências DOM ──
+    const stageEl   = document.getElementById('main-stage');
+    const camCanvas  = document.getElementById('cam-canvas');
+    const camCtx     = camCanvas.getContext('2d');
+    const drawCanvas = document.getElementById('draw-canvas');
+    const drawCtx    = drawCanvas.getContext('2d');
+    const uiCanvas   = document.getElementById('ui-canvas');
+    const uiCtx      = uiCanvas.getContext('2d');
+    const videoEl    = document.getElementById('input_video');
+    const btnLimpar  = document.getElementById('btn-limpar');
+    const contadorEl = document.getElementById('contador');
+
+    // ── Paleta: uma cor por mão (até 4) ──
+    const CORES = ['#00fbff', '#ff6b35', '#a855f7', '#4ade80'];
+
+    // ── Estado de desenho por mão ──
+    // lastPt[i] = último ponto desenhado pela mão i (null = levantou o dedo)
+    const lastPt = [null, null, null, null];
+
+    // ── Partículas de explosão (limpeza) ──
+    let sparks = [];
+
+    /** Verifica se o indicador está levantado e os demais fechados (gesto de desenho). */
+    function isIndexUp(lm) {
+      const indexUp  = lm[8].y < lm[6].y;
+      const middleDown = lm[12].y > lm[10].y;
+      const ringDown   = lm[16].y > lm[14].y;
+      return indexUp && middleDown && ringDown;
+    }
+
+    /** Detecta punho fechado (3+ dedos dobrados). */
+    function isFist(lm) {
+      const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+      let n = 0;
+      for (let i = 0; i < 4; i++) if (lm[tips[i]].y > lm[pips[i]].y) n++;
+      return n >= 3;
+    }
+
+    /** Limpa o canvas de desenho com efeito de explosão de partículas. */
+    function limparTela() {
+      // Cria partículas espalhadas pela tela
+      for (let i = 0; i < 60; i++) {
+        const el = document.createElement('div');
+        el.className = 'spark';
+        const size = 6 + Math.random() * 10;
+        const cor  = CORES[Math.floor(Math.random() * CORES.length)];
+        const tx   = (Math.random() - 0.5) * 300;
+        const ty   = (Math.random() - 0.5) * 300;
+        el.style.cssText = `
+          width:${size}px; height:${size}px;
+          background:${cor}; box-shadow:0 0 8px ${cor};
+          left:${20 + Math.random() * 80}%; top:${20 + Math.random() * 60}%;
+          --tx:${tx}px; --ty:${ty}px;
+        `;
+        stageEl.appendChild(el);
+        setTimeout(() => el.remove(), 700);
+      }
+      // Limpa o canvas de desenho
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      lastPt.fill(null);
+    }
+
+    // Botão de limpar
+    btnLimpar.addEventListener('click', limparTela);
+
+    // Controle de limpeza por punho (evita limpar múltiplas vezes no mesmo gesto)
+    let fistLimpou = false;
+
+    /** Callback principal do MediaPipe — executado a cada frame. */
+    function onResults(results) {
+      const w = stageEl.clientWidth, h = stageEl.clientHeight;
+
+      // Redimensiona todos os canvas se necessário
+      if (camCanvas.width !== w) {
+        camCanvas.width  = drawCanvas.width  = uiCanvas.width  = w;
+        camCanvas.height = drawCanvas.height = uiCanvas.height = h;
+      }
+
+      // Desenha o vídeo no canvas de fundo
+      camCtx.drawImage(results.image, 0, 0, w, h);
+
+      // Limpa o canvas de UI (esqueleto redesenhado a cada frame)
+      uiCtx.clearRect(0, 0, w, h);
+
+      const lms  = results.multiHandLandmarks  || [];
+      const hand = results.multiHandedness     || [];
+
+      contadorEl.textContent = `${lms.length} MÃO(S) ATIVA(S)`;
+
+      // Detecta se alguma mão está em punho para limpar
+      const algumPunho = lms.some(lm => isFist(lm));
+      if (algumPunho && !fistLimpou) {
+        limparTela();
+        fistLimpou = true;
+      }
+      if (!algumPunho) fistLimpou = false;
+
+      // Processa cada mão detectada (até 4)
+      lms.forEach((lm, idx) => {
+        if (idx >= 4) return; // suporta até 4 mãos
+        const cor = CORES[idx];
+
+        // Desenha o esqueleto da mão no canvas de UI
+        uiCtx.save();
+        uiCtx.shadowBlur = 12;
+        uiCtx.shadowColor = cor;
+        drawConnectors(uiCtx, lm, HAND_CONNECTIONS, { color: cor, lineWidth: 2 });
+        drawLandmarks(uiCtx, lm, { color: '#ffffff', lineWidth: 1, radius: 3 });
+        uiCtx.restore();
+
+        // Ponta do indicador (landmark 8) em coordenadas de pixel
+        const tip = lm[8];
+        const px  = tip.x * w;
+        const py  = tip.y * h;
+
+        if (isIndexUp(lm) && !isFist(lm)) {
+          // ── MODO DESENHO ──
+          if (lastPt[idx]) {
+            // Traço suave entre o ponto anterior e o atual
+            drawCtx.save();
+            drawCtx.strokeStyle = cor;
+            drawCtx.lineWidth   = 8;
+            drawCtx.lineCap     = 'round';
+            drawCtx.lineJoin    = 'round';
+            drawCtx.shadowBlur  = 18;
+            drawCtx.shadowColor = cor;
+            drawCtx.beginPath();
+            drawCtx.moveTo(lastPt[idx].x, lastPt[idx].y);
+            drawCtx.lineTo(px, py);
+            drawCtx.stroke();
+            drawCtx.restore();
+          }
+          lastPt[idx] = { x: px, y: py };
+
+          // Marcador brilhante na ponta do dedo
+          uiCtx.save();
+          uiCtx.fillStyle   = cor;
+          uiCtx.shadowBlur  = 20;
+          uiCtx.shadowColor = cor;
+          uiCtx.beginPath();
+          uiCtx.arc(px, py, 10, 0, Math.PI * 2);
+          uiCtx.fill();
+          uiCtx.restore();
+        } else {
+          // Dedo levantado ou punho: interrompe o traço atual
+          lastPt[idx] = null;
+        }
+      });
+
+      // Zera lastPt para mãos que saíram do frame
+      for (let i = lms.length; i < 4; i++) lastPt[i] = null;
+    }
+
+    // ── Inicialização MediaPipe ──
+    const hands = new Hands({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({
+      maxNumHands: 4, modelComplexity: 1,
+      minDetectionConfidence: 0.7, minTrackingConfidence: 0.7,
+    });
+    hands.onResults(onResults);
+
+    const cam = new Camera(videoEl, {
+      onFrame: async () => { await hands.send({ image: videoEl }); },
+      width: 1280, height: 720,
+    });
+    cam.start();
+
+    // Redimensiona canvas ao mudar o tamanho da janela
+    window.addEventListener('resize', () => {
+      const w = stageEl.clientWidth, h = stageEl.clientHeight;
+      // Preserva o desenho ao redimensionar copiando para um canvas temporário
+      const tmp = document.createElement('canvas');
+      tmp.width = drawCanvas.width; tmp.height = drawCanvas.height;
+      tmp.getContext('2d').drawImage(drawCanvas, 0, 0);
+      camCanvas.width  = drawCanvas.width  = uiCanvas.width  = w;
+      camCanvas.height = drawCanvas.height = uiCanvas.height = h;
+      drawCtx.drawImage(tmp, 0, 0, w, h);
+    });
+  </script>
+</body>
+</html>
