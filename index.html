@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- Página inicial (hub) — lista todos os projetos de hand tracking -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -20,7 +19,7 @@
       flex-direction: column;
     }
 
-    /* Cabeçalho do desenvolvedor (substitua foto e textos no HTML abaixo) */
+    /* Cabeçalho do desenvolvedor */
     .dev-header {
       background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
       padding: 12px 24px;
@@ -31,7 +30,7 @@
       gap: 14px;
     }
 
-    /* Foto/avatar: coloque sua imagem em assets/avatar.jpg (ou .png) */
+    /* Foto/avatar */
     .dev-avatar {
       width: 44px;
       height: 44px;
@@ -42,7 +41,7 @@
       flex-shrink: 0;
     }
 
-    /* Fallback se a imagem não existir: iniciais no círculo */
+    /* Fallback do avatar */
     .dev-avatar-fallback {
       width: 44px;
       height: 44px;
@@ -78,7 +77,7 @@
       text-transform: uppercase;
     }
 
-    /* Área central com título e cards dos projetos (tema escuro) */
+    /* Área central */
     main {
       flex: 1;
       display: flex;
@@ -111,16 +110,30 @@
       line-height: 1.5;
     }
 
-    /* Grid responsivo: 1 coluna no celular, até 3 no desktop */
+    /* Estilo para os Títulos das Categorias */
+    .category-title {
+      width: 100%;
+      max-width: 1500px;
+      margin: 40px 0 16px;
+      font-size: 1.4rem;
+      color: #e8f4fc;
+      border-left: 4px solid #00fbff;
+      padding-left: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Grid responsivo para os blocos de projetos */
     .projects {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 20px;
       width: 100%;
       max-width: 1500px;
+      margin-bottom: 20px;
     }
 
-    /* Cada card é um link <a> para o arquivo do projeto */
+    /* Cada card de projeto */
     .project-card {
       display: block;
       text-decoration: none;
@@ -153,7 +166,6 @@
       line-height: 1.45;
     }
 
-    /* Nome do arquivo exibido no rodapé do card */
     .project-card .tag {
       display: inline-block;
       margin-top: 14px;
@@ -176,14 +188,7 @@
 </head>
 <body>
 
-  <!--
-    PERSONALIZE AQUI:
-    - Foto: assets/avatar.jpg (recomendado 200×200 px, rosto centralizado)
-    - Nome: .dev-name
-    - Texto: .dev-role (use "Desenvolvedor", não "Programador")
-  -->
   <header class="dev-header">
-    <!-- Troque src pela sua foto; se não tiver arquivo, comente a <img> e use só o fallback -->
     <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
          onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
     <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
@@ -199,156 +204,165 @@
       Escolha um dos projetos abaixo. A maioria usa câmera e rastreamento de mãos (MediaPipe); alguns usam mouse ou teclado.
     </p>
 
-    <!-- Navegação: cada link abre um projeto diferente -->
-    <nav class="projects" aria-label="Projetos">
-      <a class="project-card" href="naruto.html">
-        <h2>1 - Naruto &amp; Sasuke</h2>
-        <p>Mão aberta ativa poderes. Mão esquerda: Naruto · mão direita: Sasuke.</p>
-        <span class="tag">naruto.html</span>
+    <h2 class="category-title">1. Jogos Interativos e Gamificação</h2>
+    <nav class="projects" aria-label="Jogos Interativos e Gamificação">
+      <a class="project-card" href="jogo-arma.html">
+        <h2>1 - Jogo de Arma — Hand Tracking</h2>
+        <p>Jogo de tiro com mira pelas mãos; velocidade dinâmica e pontuação.</p>
+        <span class="tag">jogo-arma.html</span>
       </a>
 
-      <a class="project-card" href="piano-neon.html">
-        <h2>2 - Piano Neon</h2>
-        <p>Pinça polegar + dedo nas teclas. Mão esquerda: Dó–Fá. Mão direita: Sol–Dó+.</p>
-        <span class="tag">piano-neon.html</span>
+      <a class="project-card" href="passarinho-dedo.html">
+        <h2>2 - Passarinho do Dedo — Esqueleto</h2>
+        <p>Jogo estilo Flappy Bird: mostre o dedo, esqueleto na tela, bônus e recordes.</p>
+        <span class="tag">passarinho-dedo.html</span>
       </a>
 
+      <a class="project-card" href="jogobolinha/posepong.html">
+        <h2>3 - Ping Pong</h2>
+        <p>Versão inicial: Mova as mãos para cima e para baixo para controlar os paddles. Dois jogadores simultâneos.</p>
+        <span class="tag">posepong.html</span>
+      </a>
+
+      <a class="project-card" href="jogobolinha/fatiador.html">
+        <h2>4 - Fatiador de Bolinhas</h2>
+        <p>Versão inicial: Corte as bolinhas verdes com o indicador. Evite as vermelhas. Buff dourado: 2× pontos por 10s.</p>
+        <span class="tag">fatiador.html</span>
+      </a>
+
+      <a class="project-card" href="jogobolinha/bubbleshooter.html">
+        <h2>5 - Atirador de bolhas</h2>
+        <p>Versão inicial: Aponte o indicador para mirar. Feche o punho para atirar. Combine 3+ bolhas da mesma cor para explodir.</p>
+        <span class="tag">bubbleshooter.html</span>
+      </a>
+    </nav>
+
+    <h2 class="category-title">2. Arte Digital, Pintura e Efeitos Virtuais (VFX)</h2>
+    <nav class="projects" aria-label="Arte Digital, Pintura e Efeitos Virtuais">
+      <a class="project-card" href="faiscas-fogo.html">
+        <h2>6 - Faíscas de Fogo</h2>
+        <p>Desenhe faíscas e trilhas de fogo com o indicador. Gesto especial limpa a tela.</p>
+        <span class="tag">faiscas-fogo.html</span>
+      </a>
+
+      <a class="project-card" href="arco-iris.html">
+        <h2>7 - Arco-íris</h2>
+        <p>Desenhe trilhas arco-íris. Pinça arrasta traços; botão limpa tudo.</p>
+        <span class="tag">arco-iris.html</span>
+      </a>
+
+      <a class="project-card" href="fumaca-azul.html">
+        <h2>8 - Fumaça Azul Realista — Uma Mão</h2>
+        <p>Rastro de fumaça azul realista gerado por uma mão na câmera.</p>
+        <span class="tag">fumaca-azul.html</span>
+      </a>
+
+      <a class="project-card" href="desenho-pontilhado.html">
+        <h2>9 - Desenho 3D Pontilhado — Uma Mão</h2>
+        <p>Pintura pontilhada 3D brilhante controlada por uma mão.</p>
+        <span class="tag">desenho-pontilhado.html</span>
+      </a>
+
+      <a class="project-card" href="fogoegelo.html">
+        <h2>10 - Fogo e Gelo</h2>
+        <p>Versão inicial: Mãos ficam em chamas com a possibilidade de Desenhar as juntar os dedos.</p>
+        <span class="tag">fogoegelo.html</span>
+      </a>
+
+      <a class="project-card" href="senai-pintura.html" style="border-color:rgba(0,61,165,0.6);background:rgba(0,61,165,0.06)">
+        <h2>11 - ⭐ Pintura Colaborativa</h2>
+        <p>Até 4 mãos simultâneas, cada uma com cor diferente. Indicador levantado desenha. Punho fecha → explosão e limpa a tela.</p>
+        <span class="tag">senai-pintura.html</span>
+      </a>
+    </nav>
+
+    <h2 class="category-title">3. Manipulação de Partículas e Formas 3D</h2>
+    <nav class="projects" aria-label="Manipulação de Partículas e Formas 3D">
       <a class="project-card" href="globo-3d.html">
-        <h2>3 - Globo 3D</h2>
+        <h2>12 - Globo 3D</h2>
         <p>Mova, gire e dê zoom no planeta Terra com gestos das duas mãos.</p>
         <span class="tag">globo-3d.html</span>
       </a>
 
-      <a class="project-card" href="texto.html">
-        <h2>4 - Partículas 3D</h2>
-        <p>Coração de partículas que vira texto ao digitar. O mouse afasta as partículas.</p>
-        <span class="tag">texto.html</span>
-      </a>
-
       <a class="project-card" href="particulas.html">
-        <h2>5 - Partículas Neon 3D</h2>
+        <h2>13 - Partículas Neon 3D</h2>
         <p>Formas neon (coração, estrela, esfera) controladas pelos dedos. Pinça na mão esquerda dá zoom.</p>
         <span class="tag">particulas.html</span>
       </a>
 
       <a class="project-card" href="esfera.html">
-        <h2>6 - Esfera de Partículas</h2>
+        <h2>14 - Esfera de Partículas</h2>
         <p>Pinça estica a esfera; punho explode as partículas. A outra mão move o conjunto.</p>
         <span class="tag">esfera.html</span>
       </a>
 
-      <a class="project-card" href="teclado-virtual.html">
-        <h2>7 - Teclado Virtual Neon</h2>
-        <p>Teclado QWERTY na tela: pinça em uma tecla para digitar. Mão aberta apaga letra por letra.</p>
-        <span class="tag">teclado-virtual.html</span>
-      </a>
-
       <a class="project-card" href="simbiote.html">
-        <h2>8 - Simbiote Cibernético</h2>
+        <h2>15 - Simbiote Cibernético</h2>
         <p>Esfera de partículas: uma mão gira, a outra corrompe (roxo) ou explode (vermelho).</p>
         <span class="tag">simbiote.html</span>
       </a>
 
-      <a class="project-card" href="interacao-neon.html">
-        <h2>9 - Interação Neon</h2>
-        <p>Raios elétricos entre dedos e entre as duas mãos. Punhos fechados desconectam com explosão.</p>
-        <span class="tag">interacao-neon.html</span>
-      </a>
-
-      <a class="project-card" href="faiscas-fogo.html">
-        <h2>10 - Faíscas de Fogo</h2>
-        <p>Desenhe faíscas e trilhas de fogo com o indicador. Gesto especial limpa a tela.</p>
-        <span class="tag">faiscas-fogo.html</span>
-      </a>
-
       <a class="project-card" href="particulas-ar.html">
-        <h2>11 - Partículas AR</h2>
+        <h2>16 - Partículas AR</h2>
         <p>Câmera ao vivo com partículas 3D: linha, cubo, esfera ou mapa da Terra pelos gestos.</p>
         <span class="tag">particulas-ar.html</span>
       </a>
 
       <a class="project-card" href="galaxia-quantica.html">
-        <h2>12 - Galáxia Quântica</h2>
+        <h2>17 - Galáxia Quântica</h2>
         <p>Galáxia de estrelas com esqueleto 3D. Punho, mão aberta e gestos mudam o efeito.</p>
         <span class="tag">galaxia-quantica.html</span>
       </a>
 
-      <a class="project-card" href="caveira-neon.html">
-        <h2>13 - Caveira Neon</h2>
-        <p>Caveira de partículas: indicador espalha (dourado) ou restaura (azul). Esqueleto 2D por cima.</p>
-        <span class="tag">caveira-neon.html</span>
-      </a>
-
-      <a class="project-card" href="arco-iris.html">
-        <h2>14 - Arco-íris</h2>
-        <p>Desenhe trilhas arco-íris. Pinça arrasta traços; botão limpa tudo.</p>
-        <span class="tag">arco-iris.html</span>
-      </a>
-
       <a class="project-card" href="cubos-3d.html">
-        <h2>15 - Grade de Cubos 3D</h2>
+        <h2>18 - Grade de Cubos 3D</h2>
         <p>Grade de cubos metálicos: a mão revela e o punho acende tudo em azul neon.</p>
         <span class="tag">cubos-3d.html</span>
       </a>
 
-      <a class="project-card" href="galaxia-texto-morph.html">
-        <h2>16 - Galáxia 3D — Texto Morph Pro</h2>
-        <p>Texto e partículas em galáxia 3D com morph animado controlado pelas mãos.</p>
-        <span class="tag">galaxia-texto-morph.html</span>
-      </a>
-
-      <a class="project-card" href="coracao-neon.html">
-        <h2>17 - Coração Neon Brilhante</h2>
-        <p>Animação de coração neon luminoso com rastreamento de mãos.</p>
-        <span class="tag">coracao-neon.html</span>
-      </a>
-
-      <a class="project-card" href="esqueleto-laser-multicolor.html">
-        <h2>18 - Esqueleto Laser Neon Multicolorido</h2>
-        <p>Esqueleto da mão com feixes laser neon em várias cores.</p>
-        <span class="tag">esqueleto-laser-multicolor.html</span>
-      </a>
-
-      <a class="project-card" href="caveira-fantasma.html">
-        <h2>19 - Caveira Fantasma Neon</h2>
-        <p>Caveira 2D realista: ao espalhar fica dourada; ao voltar, azul neon.</p>
-        <span class="tag">caveira-fantasma.html</span>
-      </a>
-
-      <a class="project-card" href="esqueleto-laser-azul.html">
-        <h2>20 - Esqueleto Laser Neon Azul</h2>
-        <p>Esqueleto da mão com efeito laser neon azul.</p>
-        <span class="tag">esqueleto-laser-azul.html</span>
-      </a>
-
-      <a class="project-card" href="fumaca-azul.html">
-        <h2>21 - Fumaça Azul Realista — Uma Mão</h2>
-        <p>Rastro de fumaça azul realista gerado por uma mão na câmera.</p>
-        <span class="tag">fumaca-azul.html</span>
-      </a>
-
       <a class="project-card" href="saturno-3d-particulas.html">
-        <h2>22 - Saturno 3D Azul — Partículas</h2>
+        <h2>19 - Saturno 3D Azul — Partículas</h2>
         <p>Saturno 3D com anéis e partículas de poeira interativas pelos gestos.</p>
         <span class="tag">saturno-3d-particulas.html</span>
       </a>
 
-      <a class="project-card" href="desenho-pontilhado.html">
-        <h2>23 - Desenho 3D Pontilhado — Uma Mão</h2>
-        <p>Pintura pontilhada 3D brilhante controlada por uma mão.</p>
-        <span class="tag">desenho-pontilhado.html</span>
-      </a>
-
-      <a class="project-card" href="jogo-arma.html">
-        <h2>24 - Jogo de Arma — Hand Tracking</h2>
-        <p>Jogo de tiro com mira pelas mãos; velocidade dinâmica e pontuação.</p>
-        <span class="tag">jogo-arma.html</span>
-      </a>
-
       <a class="project-card" href="saturno-tempo-real.html">
-        <h2>25 - Saturno 3D — Tempo Real</h2>
+        <h2>20 - Saturno 3D — Tempo Real</h2>
         <p>Planeta Saturno em 3D com controle em tempo real pelas mãos.</p>
         <span class="tag">saturno-tempo-real.html</span>
+      </a>
+
+      <a class="project-card" href="particulas-v2.html">
+        <h2>21 - Partículas 3D (v2)</h2>
+        <p>Partículas 3D e gestos ósseos das mãos no sistema Axtarget.</p>
+        <span class="tag">particulas-v2.html</span>
+      </a>
+
+      <a class="project-card" href="particulas-v1.html">
+        <h2>22 - Partículas 3D (v1)</h2>
+        <p>Versão inicial: partículas 3D e gestos ósseos com hand tracking.</p>
+        <span class="tag">particulas-v1.html</span>
+      </a>
+    </nav>
+
+    <h2 class="category-title">4. Interfaces de Controle, Produtividade e Institucional</h2>
+    <nav class="projects" aria-label="Interfaces de Controle e Institucional">
+      <a class="project-card" href="piano-neon.html">
+        <h2>23 - Piano Neon</h2>
+        <p>Pinça polegar + dedo nas teclas. Mão esquerda: Dó–Fá. Mão direita: Sol–Dó+.</p>
+        <span class="tag">piano-neon.html</span>
+      </a>
+
+      <a class="project-card" href="teclado-virtual.html">
+        <h2>24 - Teclado Virtual Neon</h2>
+        <p>Teclado QWERTY na tela: pinça em uma tecla para digitar. Mão aberta apaga letra por letra.</p>
+        <span class="tag">teclado-virtual.html</span>
+      </a>
+
+      <a class="project-card" href="interacao-neon.html">
+        <h2>25 - Interação Neon</h2>
+        <p>Raios elétricos entre dedos e entre as duas mãos. Punhos fechados desconectam com explosão.</p>
+        <span class="tag">interacao-neon.html</span>
       </a>
 
       <a class="project-card" href="fusao.html">
@@ -357,63 +371,67 @@
         <span class="tag">fusao.html</span>
       </a>
 
-      <a class="project-card" href="passarinho-dedo.html">
-        <h2>27 - Passarinho do Dedo — Esqueleto</h2>
-        <p>Jogo estilo Flappy Bird: mostre o dedo, esqueleto na tela, bônus e recordes.</p>
-        <span class="tag">passarinho-dedo.html</span>
-      </a>
-
-      <a class="project-card" href="particulas-v2.html">
-        <h2>28 - Partículas 3D (v2)</h2>
-        <p>Partículas 3D e gestos ósseos das mãos no sistema Axtarget.</p>
-        <span class="tag">particulas-v2.html</span>
-      </a>
-
-      <a class="project-card" href="particulas-v1.html">
-        <h2>29 - Partículas 3D (v1)</h2>
-        <p>Versão inicial: partículas 3D e gestos ósseos com hand tracking.</p>
-        <span class="tag">particulas-v1.html</span>
-      </a>
-
-      <a class="project-card" href="fogoegelo.html">
-        <h2>30 - Fogo e Gelo</h2>
-        <p>Versão inicial: Mãos ficam em chamas com a possibilidade de Desenhar as juntar os dedos.</p>
-        <span class="tag">fogoegelo.html</span>
-      </a>
-
-      <a class="project-card" href="jogobolinha/posepong.html">
-        <h2>31 - Ping Pong</h2>
-        <p>Versão inicial: Mova as mãos para cima e para baixo para controlar os paddles. Dois jogadores simultâneos.</p>
-        <span class="tag">posepong.html</span>
-      </a>
-
-      <a class="project-card" href="jogobolinha/fatiador.html">
-        <h2>32 - Fatiador de Bolinhas</h2>
-        <p>Versão inicial: Corte as bolinhas verdes com o indicador. Evite as vermelhas. Buff dourado: 2× pontos por 10s.</p>
-        <span class="tag">fatiador.html</span>
-      </a>
-      <a class="project-card" href="jogobolinha/bubbleshooter.html">
-        <h2>33 - Atirador de bolhas</h2>
-        <p>Versão inicial: Aponte o indicador para mirar. Feche o punho para atirar. Combine 3+ bolhas da mesma cor para explodir.</p>
-        <span class="tag">bubbleshooter.html</span>
-      </a>
-
       <a class="project-card" href="senai-assinatura.html" style="border-color:rgba(0,61,165,0.6);background:rgba(0,61,165,0.06)">
-        <h2>34 - ⭐ Assinatura SENAI</h2>
+        <h2>27 - ⭐ Assinatura SENAI</h2>
         <p>Mostre a mão → partículas formam "SENAI". Punho fecha → explosão e novo texto. Ciclo automático de mensagens.</p>
         <span class="tag">senai-assinatura.html</span>
       </a>
 
-      <a class="project-card" href="senai-pintura.html" style="border-color:rgba(0,61,165,0.6);background:rgba(0,61,165,0.06)">
-        <h2>35 - ⭐ Pintura Colaborativa</h2>
-        <p>Até 4 mãos simultâneas, cada uma com cor diferente. Indicador levantado desenha. Punho fecha → explosão e limpa a tela.</p>
-        <span class="tag">senai-pintura.html</span>
-      </a>
-
       <a class="project-card" href="senai-apresentacao.html" style="border-color:rgba(0,61,165,0.6);background:rgba(0,61,165,0.06)">
-        <h2>36 - ⭐ Apresentação Interativa</h2>
+        <h2>28 - ⭐ Apresentação Interativa</h2>
         <p>Slides do SENAI controlados por gestos. Punho fecha → próximo slide. Mão aberta → voltar. Indicador destaca itens.</p>
         <span class="tag">senai-apresentacao.html</span>
+      </a>
+    </nav>
+
+    <h2 class="category-title">5. Cultura Pop, Estilização e Temáticos</h2>
+    <nav class="projects" aria-label="Cultura Pop, Estilização e Temáticos">
+      <a class="project-card" href="naruto.html">
+        <h2>29 - Naruto &amp; Sasuke</h2>
+        <p>Mão aberta ativa poderes. Mão esquerda: Naruto · mão direita: Sasuke.</p>
+        <span class="tag">naruto.html</span>
+      </a>
+
+      <a class="project-card" href="texto.html">
+        <h2>30 - Partículas 3D</h2>
+        <p>Coração de partículas que vira texto ao digitar. O mouse afasta as partículas.</p>
+        <span class="tag">texto.html</span>
+      </a>
+
+      <a class="project-card" href="caveira-neon.html">
+        <h2>31 - Caveira Neon</h2>
+        <p>Caveira de partículas: indicador espalha (dourado) ou restaura (azul). Esqueleto 2D por cima.</p>
+        <span class="tag">caveira-neon.html</span>
+      </a>
+
+      <a class="project-card" href="galaxia-texto-morph.html">
+        <h2>32 - Galáxia 3D — Texto Morph Pro</h2>
+        <p>Texto e partículas em galáxia 3D com morph animado controlado pelas mãos.</p>
+        <span class="tag">galaxia-texto-morph.html</span>
+      </a>
+
+      <a class="project-card" href="coracao-neon.html">
+        <h2>33 - Coração Neon Brilhante</h2>
+        <p>Animação de coração neon luminoso com rastreamento de mãos.</p>
+        <span class="tag">coracao-neon.html</span>
+      </a>
+
+      <a class="project-card" href="esqueleto-laser-multicolor.html">
+        <h2>34 - Esqueleto Laser Neon Multicolorido</h2>
+        <p>Esqueleto da mão com feixes laser neon em várias cores.</p>
+        <span class="tag">esqueleto-laser-multicolor.html</span>
+      </a>
+
+      <a class="project-card" href="caveira-fantasma.html">
+        <h2>35 - Caveira Fantasma Neon</h2>
+        <p>Caveira 2D realista: ao espalhar fica dourada; ao voltar, azul neon.</p>
+        <span class="tag">caveira-fantasma.html</span>
+      </a>
+
+      <a class="project-card" href="esqueleto-laser-azul.html">
+        <h2>36 - Esqueleto Laser Neon Azul</h2>
+        <p>Esqueleto da mão com efeito laser neon azul.</p>
+        <span class="tag">esqueleto-laser-azul.html</span>
       </a>
 
       <a class="project-card" href="chamas-espirito-santo.html" style="border-color:rgba(255,100,0,0.5);background:rgba(255,60,0,0.05)">
@@ -422,6 +440,7 @@
         <span class="tag">chamas-espirito-santo.html</span>
       </a>
     </nav>
+
   </main>
 
   <footer>

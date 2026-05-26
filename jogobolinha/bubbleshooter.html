@@ -258,7 +258,7 @@
         cam.start();
       },
 
-      /** Reinicia o jogo zerando pontuação, nível e grade de bolhas. */
+      /** Reinicia o jogo e gera a grade inicial. */
       start() {
         this.score = 0; this.level = 1;
         this.flyingBubble = null;
@@ -271,8 +271,10 @@
         document.getElementById('overlayEnd').classList.remove('visible');
       },
 
-      /** Atualiza pontuação e nível no HUD. */
       updateHud() {
+        document.getElementById('scoreDisplay').textContent = this.score;
+        document.getElementById('levelDisplay').textContent = this.level;
+      },
 
       /** Gera a grade de bolhas coloridas. */
       buildGrid() {
@@ -448,10 +450,7 @@
         this.drawScene(ctx, w, h);
       },
 
-      /**
-       * Encaixa a bolha na grade e verifica combinações de 3+ da mesma cor.
-       * Se a grade ficar vazia, avança para o próximo nível.
-       */
+      /** Encaixa a bolha na grade e verifica combinações. */
       placeBubble(fb, row, col) {
         row = Math.max(0, Math.min(this.gridRows - 1, row));
         col = Math.max(0, Math.min(this.gridCols - 1, col));
