@@ -1,0 +1,571 @@
+﻿<!DOCTYPE html>
+<!--
+  chamas-espirito-santo.html
+  Chamas do Espírito Santo — Hand Tracking
+  ─────────────────────────────────────────
+  • Mão aberta → chamas douradas/vermelhas sobem das palmas
+  • Duas mãos abertas → raios de luz branca entre os dedos (Pentecostes)
+  • Duas mãos se aproximam → explosão de luz dourada
+  • Fundo escuro com brasas subindo continuamente
+  • Versículo exibido na tela
+  ─────────────────────────────────────────
+  Josimar Menegatt · MediaPipe + Canvas 2D
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chamas do Espírito Santo | Josimar Menegatt</title>
+
+  <!-- MediaPipe: câmera e detecção de mãos -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0; overflow: hidden; background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+
+    /* ── Cabeçalho padrão do projeto ── */
+    .dev-header {
+      background: linear-gradient(90deg, #ffffff 0%, #e8f4fc 50%, #ffffff 100%);
+      padding: 12px 24px; border-bottom: 2px solid #00b8d4;
+      box-shadow: 0 2px 12px rgba(0,80,120,0.08);
+      display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 200;
+    }
+    .dev-avatar {
+      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+      border: 2px solid #00d4ff; box-shadow: 0 0 12px rgba(0,251,255,0.35); flex-shrink: 0;
+    }
+    .dev-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, #0054a6, #00d4ff);
+      color: #fff; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #00d4ff; flex-shrink: 0;
+    }
+    .dev-identity { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .dev-name  { color: #0d2137; font-size: 16px; font-weight: 700; }
+    .dev-role  { color: #007a94; font-size: 11px; line-height: 1.35; }
+    .dev-back-link {
+      color: #0054a6; font-size: 12px; font-weight: 600; text-decoration: none;
+      padding: 6px 12px; border: 1px solid #00b8d4; border-radius: 6px; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dev-back-link:hover { background: rgba(0,184,212,0.12); }
+
+    /* ── Área principal ── */
+    .main-stage {
+      position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000;
+    }
+
+    /* Canvas principal: câmera + efeitos (espelhado) */
+    #output_canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      transform: scaleX(-1); z-index: 2;
+    }
+
+    /* Vídeo oculto — alimenta o MediaPipe */
+    #input_video { display: none; }
+
+    /* Tela de carregamento */
+    #loading-screen {
+      position: absolute; inset: 0; background: #000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100; gap: 20px;
+    }
+    .loader {
+      width: 56px; height: 56px;
+      border: 3px solid rgba(255,140,0,0.2);
+      border-top: 3px solid #ff8c00;
+      border-radius: 50%; animation: spin 1s linear infinite;
+    }
+    #loading-screen p {
+      color: rgba(255,180,50,0.8); font-family: monospace;
+      letter-spacing: 3px; font-size: 13px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Versículo bíblico — exibido na parte inferior */
+    #versiculo {
+      position: absolute; bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10; text-align: center;
+      pointer-events: none;
+      transition: opacity 1s ease;
+    }
+    #versiculo p {
+      color: rgba(255, 220, 120, 0.9);
+      font-size: clamp(0.85rem, 1.8vw, 1.1rem);
+      font-style: italic; line-height: 1.5;
+      text-shadow: 0 0 20px rgba(255,140,0,0.8), 0 0 40px rgba(255,80,0,0.4);
+      margin: 0 0 4px;
+    }
+    #versiculo span {
+      color: rgba(255,180,60,0.6);
+      font-size: 0.8rem; font-family: monospace; letter-spacing: 1px;
+    }
+
+    /* Dica de gesto — exibida quando nenhuma mão é detectada */
+    #hint {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10; text-align: center; pointer-events: none;
+      transition: opacity 0.6s;
+    }
+    #hint p {
+      color: rgba(255,180,60,0.5); font-size: 1rem;
+      font-family: monospace; letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(255,100,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Cabeçalho padrão ── -->
+  <header class="dev-header">
+    <img class="dev-avatar" src="assets/avatar.jpg" alt="Foto de Josimar Menegatt"
+         onerror="this.style.display='none'; document.getElementById('avatar-fallback').style.display='flex';">
+    <div id="avatar-fallback" class="dev-avatar-fallback" style="display:none;" aria-hidden="true">JM</div>
+    <div class="dev-identity">
+      <span class="dev-name">Chamas do Espírito Santo</span>
+      <span class="dev-role">Levante as mãos → chamas sobem das palmas. Aproxime as duas mãos → luz do Pentecostes.</span>
+    </div>
+    <a class="dev-back-link" href="index.html">← Início</a>
+  </header>
+
+  <!-- ── Área principal ── -->
+  <div class="main-stage" id="main-stage">
+
+    <!-- Tela de carregamento -->
+    <div id="loading-screen">
+      <div class="loader"></div>
+      <p>AGUARDANDO CÂMERA...</p>
+    </div>
+
+    <video id="input_video" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <!-- Versículo bíblico -->
+    <div id="versiculo">
+      <p id="versiculo-texto">"E apareceram-lhes línguas repartidas, como que de fogo"</p>
+      <span id="versiculo-ref">Atos 2:3</span>
+    </div>
+
+    <!-- Dica inicial -->
+    <div id="hint">
+      <p>🙌 LEVANTE AS MÃOS</p>
+    </div>
+
+  </div><!-- fim .main-stage -->
+
+  <script>
+    // ── Referências DOM ──
+    const stageEl      = document.getElementById('main-stage');
+    const videoEl      = document.getElementById('input_video');
+    const canvasEl     = document.getElementById('output_canvas');
+    const ctx          = canvasEl.getContext('2d');
+    const loadingEl    = document.getElementById('loading-screen');
+    const hintEl       = document.getElementById('hint');
+    const versiculoEl  = document.getElementById('versiculo');
+    const versTextoEl  = document.getElementById('versiculo-texto');
+    const versRefEl    = document.getElementById('versiculo-ref');
+
+    // ── Versículos que ciclam automaticamente ──
+    const VERSICULOS = [
+      { texto: '"E apareceram-lhes línguas repartidas, como que de fogo"',         ref: 'Atos 2:3'          },
+      { texto: '"Ele vos batizará com o Espírito Santo e com fogo"',               ref: 'Mateus 3:11'       },
+      { texto: '"O Senhor teu Deus é fogo consumidor"',                            ref: 'Deuteronômio 4:24' },
+      { texto: '"Não apagueis o Espírito"',                                        ref: '1 Tessalonicenses 5:19' },
+      { texto: '"Sede cheios do Espírito"',                                        ref: 'Efésios 5:18'      },
+      { texto: '"O fogo arderá continuamente no altar; não se apagará"',           ref: 'Levítico 6:13'     },
+    ];
+    let versIdx = 0;
+
+    /** Troca o versículo com fade. */
+    function proximoVersiculo() {
+      versiculoEl.style.opacity = '0';
+      setTimeout(() => {
+        versIdx = (versIdx + 1) % VERSICULOS.length;
+        versTextoEl.textContent = VERSICULOS[versIdx].texto;
+        versRefEl.textContent   = VERSICULOS[versIdx].ref;
+        versiculoEl.style.opacity = '1';
+      }, 1000);
+    }
+    setInterval(proximoVersiculo, 9000);
+
+    // ── Conexões do esqueleto da mão (MediaPipe) ──
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],
+      [0,17]
+    ];
+
+    // ── Estado global ──
+    let particles      = [];   // partículas de fogo/brasa/luz
+    let emberParticles = [];   // brasas de fundo (sempre ativas)
+    let lightBolts     = [];   // raios de luz entre as mãos
+    let handIntensity  = [0, 0]; // intensidade do efeito por mão (0–1)
+    let handSurge      = [0, 0]; // surto ao abrir a mão
+    let wasOpen        = [false, false];
+    let pentecostMode  = false;  // duas mãos próximas = modo Pentecostes
+    let pentecostTimer = 0;
+
+    // ── Redimensiona o canvas ──
+    function resizeCanvas() {
+      canvasEl.width  = stageEl.clientWidth;
+      canvasEl.height = stageEl.clientHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // ── Detecta mão aberta (3+ dedos estendidos) ──
+    function isHandOpen(lm) {
+      const tips = [8,12,16,20], pips = [6,10,14,18];
+      const wrist = lm[0]; let n = 0;
+      for (let i = 0; i < 4; i++) {
+        const dTip = Math.hypot(lm[tips[i]].x - wrist.x, lm[tips[i]].y - wrist.y);
+        const dPip = Math.hypot(lm[pips[i]].x - wrist.x, lm[pips[i]].y - wrist.y);
+        if (dTip > dPip) n++;
+      }
+      return n >= 3;
+    }
+
+    // ── Gera uma partícula de fogo/brasa ──
+    function spawnFlame(x, y, surge = 0, type = 'fire') {
+      const isGold = type === 'gold';
+      particles.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y + (Math.random() - 0.5) * 10,
+        vx: (Math.random() - 0.5) * 3,
+        // Sobe mais rápido com o surto inicial
+        vy: -(Math.random() * 8 + 4) - surge * 18,
+        life: 1.0,
+        decay: 0.018 + Math.random() * 0.025,
+        size: isGold ? (Math.random() * 30 + 15) : (Math.random() * 24 + 8),
+        type,
+        wobble: Math.random() * Math.PI * 2, // fase de oscilação lateral
+      });
+    }
+
+    // ── Gera uma brasa de fundo (sempre sobe lentamente) ──
+    function spawnEmber() {
+      const w = canvasEl.width, h = canvasEl.height;
+      emberParticles.push({
+        x: Math.random() * w,
+        y: h + 10,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: -(Math.random() * 1.5 + 0.5),
+        life: 1.0,
+        decay: 0.004 + Math.random() * 0.006,
+        size: Math.random() * 3 + 1,
+      });
+    }
+
+    // ── Gera um raio de luz entre dois pontos (Pentecostes) ──
+    function spawnLightBolt(x1, y1, x2, y2) {
+      const bolt = [];
+      let cx = x1, cy = y1;
+      const steps = 20;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        bolt.push({
+          x: cx + (x2 - x1) * t + (Math.random() - 0.5) * 30,
+          y: cy + (y2 - y1) * t + (Math.random() - 0.5) * 30,
+        });
+      }
+      lightBolts.push({ path: bolt, life: 1.0 });
+    }
+
+    // ── Explosão de luz dourada (quando as mãos se tocam) ──
+    function spawnPentecostBurst(x, y) {
+      for (let i = 0; i < 80; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 12 + 4;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 4,
+          life: 1.0,
+          decay: 0.02 + Math.random() * 0.03,
+          size: Math.random() * 20 + 8,
+          type: 'burst',
+          wobble: 0,
+        });
+      }
+    }
+
+    // ── Desenha uma partícula de fogo com gradiente radial ──
+    function drawFlameParticle(p) {
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+
+      if (p.type === 'fire') {
+        // Fogo: branco no centro → laranja → vermelho
+        grad.addColorStop(0,   `rgba(255,255,220,${p.life})`);
+        grad.addColorStop(0.2, `rgba(255,180,0,${p.life * 0.9})`);
+        grad.addColorStop(0.5, `rgba(255,60,0,${p.life * 0.6})`);
+        grad.addColorStop(1,   `rgba(100,0,0,0)`);
+      } else if (p.type === 'gold') {
+        // Dourado: branco → dourado → âmbar
+        grad.addColorStop(0,   `rgba(255,255,200,${p.life})`);
+        grad.addColorStop(0.25,`rgba(255,215,0,${p.life * 0.9})`);
+        grad.addColorStop(0.6, `rgba(200,120,0,${p.life * 0.5})`);
+        grad.addColorStop(1,   `rgba(80,30,0,0)`);
+      } else if (p.type === 'burst') {
+        // Explosão: branco puro → dourado → transparente
+        grad.addColorStop(0,   `rgba(255,255,255,${p.life})`);
+        grad.addColorStop(0.3, `rgba(255,220,80,${p.life * 0.8})`);
+        grad.addColorStop(0.7, `rgba(255,120,0,${p.life * 0.3})`);
+        grad.addColorStop(1,   `rgba(0,0,0,0)`);
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ── Desenha uma brasa de fundo ──
+    function drawEmber(e) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = e.life * 0.7;
+      ctx.fillStyle = `hsl(${20 + Math.random() * 20}, 100%, 60%)`;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#ff6600';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ── Desenha um raio de luz (Pentecostes) ──
+    function drawLightBolt(b) {
+      if (b.path.length < 2) return;
+      ctx.save();
+
+      // Camada externa: brilho difuso dourado
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,200,50,${b.life * 0.3})`;
+      ctx.lineWidth = 18;
+      ctx.shadowBlur = 30;
+      ctx.shadowColor = '#ffcc00';
+      ctx.beginPath();
+      ctx.moveTo(b.path[0].x, b.path[0].y);
+      for (let i = 1; i < b.path.length; i++) ctx.lineTo(b.path[i].x, b.path[i].y);
+      ctx.stroke();
+
+      // Camada média: laranja
+      ctx.strokeStyle = `rgba(255,140,0,${b.life * 0.6})`;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      // Camada interna: branco puro
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = `rgba(255,255,255,${b.life * 0.9})`;
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // ── Callback principal do MediaPipe ──
+    function onResults(results) {
+      loadingEl.style.display = 'none';
+
+      const w = canvasEl.width, h = canvasEl.height;
+
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+
+      // Fundo: vídeo da câmera com escurecimento dramático
+      ctx.drawImage(results.image, 0, 0, w, h);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = 'rgba(5, 2, 0, 0.65)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Brasas de fundo (sempre ativas, independente das mãos)
+      if (Math.random() < 0.4) spawnEmber();
+      emberParticles = emberParticles.filter(e => e.life > 0);
+      emberParticles.forEach(e => {
+        e.x += e.vx + Math.sin(Date.now() * 0.001 + e.y) * 0.3;
+        e.y += e.vy;
+        e.life -= e.decay;
+        drawEmber(e);
+      });
+
+      const lms  = results.multiHandLandmarks  || [];
+      const hand = results.multiHandedness     || [];
+
+      hintEl.style.opacity = lms.length > 0 ? '0' : '1';
+
+      // ── Verifica modo Pentecostes (duas mãos abertas próximas) ──
+      if (lms.length === 2) {
+        const open0 = isHandOpen(lms[0]);
+        const open1 = isHandOpen(lms[1]);
+        if (open0 && open1) {
+          // Distância entre os pulsos
+          const dist = Math.hypot(
+            lms[0][0].x - lms[1][0].x,
+            lms[0][0].y - lms[1][0].y
+          );
+          if (dist < 0.35) {
+            // Mãos próximas: modo Pentecostes ativo
+            if (!pentecostMode) {
+              // Primeira vez: explosão de luz
+              const mx = ((lms[0][9].x + lms[1][9].x) / 2) * w;
+              const my = ((lms[0][9].y + lms[1][9].y) / 2) * h;
+              spawnPentecostBurst(mx, my);
+            }
+            pentecostMode  = true;
+            pentecostTimer = 8; // mantém por 8 frames após separar
+
+            // Raios de luz entre as pontas dos dedos das duas mãos
+            const tips = [4, 8, 12, 16, 20];
+            tips.forEach(ti => {
+              if (Math.random() < 0.5) {
+                spawnLightBolt(
+                  lms[0][ti].x * w, lms[0][ti].y * h,
+                  lms[1][ti].x * w, lms[1][ti].y * h
+                );
+              }
+            });
+
+            // Halo de luz dourada entre as mãos
+            const cx = ((lms[0][9].x + lms[1][9].x) / 2) * w;
+            const cy = ((lms[0][9].y + lms[1][9].y) / 2) * h;
+            const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, 200);
+            halo.addColorStop(0,   'rgba(255,240,150,0.35)');
+            halo.addColorStop(0.4, 'rgba(255,160,0,0.15)');
+            halo.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = halo;
+            ctx.fillRect(0, 0, w, h);
+            ctx.restore();
+          } else {
+            if (pentecostTimer > 0) pentecostTimer--;
+            else pentecostMode = false;
+          }
+        } else {
+          pentecostMode = false;
+        }
+      } else {
+        pentecostMode = false;
+      }
+
+      // ── Processa cada mão ──
+      lms.forEach((lm, idx) => {
+        const isOpen = isHandOpen(lm);
+
+        // Aumenta/diminui intensidade suavemente
+        handIntensity[idx] += isOpen ? 0.06 : -0.12;
+        handIntensity[idx]  = Math.max(0, Math.min(1, handIntensity[idx]));
+
+        // Surto ao abrir a mão (chama inicial mais alta)
+        if (isOpen && !wasOpen[idx]) handSurge[idx] = 1.0;
+        wasOpen[idx] = isOpen;
+        handSurge[idx] *= 0.88;
+
+        const intensity = handIntensity[idx];
+        if (intensity < 0.01) return;
+
+        // Posição da palma (landmark 9)
+        const palm = lm[9];
+        const px   = palm.x * w;
+        const py   = palm.y * h;
+
+        // Halo de calor ao redor da palma
+        const flicker = Math.sin(Date.now() * 0.025) * 30;
+        const heatGlow = ctx.createRadialGradient(px, py, 0, px, py, 380 + flicker);
+        heatGlow.addColorStop(0,   `rgba(255,120,0,${0.35 * intensity})`);
+        heatGlow.addColorStop(0.4, `rgba(200,50,0,${0.12 * intensity})`);
+        heatGlow.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = heatGlow;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+
+        // Chamas em cada landmark da mão
+        lm.forEach(pt => {
+          const fx = pt.x * w, fy = pt.y * h;
+          if (Math.random() < intensity * 0.7) {
+            spawnFlame(fx, fy, handSurge[idx], pentecostMode ? 'gold' : 'fire');
+          }
+        });
+
+        // Chamas extras nas pontas dos dedos (mais intensas)
+        [4, 8, 12, 16, 20].forEach(ti => {
+          const fx = lm[ti].x * w, fy = lm[ti].y * h;
+          for (let k = 0; k < 2; k++) {
+            if (Math.random() < intensity) {
+              spawnFlame(fx, fy, handSurge[idx] * 1.5, pentecostMode ? 'gold' : 'fire');
+            }
+          }
+        });
+
+        // Chamas nas conexões entre os ossos da mão
+        HAND_CONNECTIONS.forEach(([a, b]) => {
+          const mx = ((lm[a].x + lm[b].x) / 2) * w;
+          const my = ((lm[a].y + lm[b].y) / 2) * h;
+          if (Math.random() < intensity * 0.4) {
+            spawnFlame(mx, my, handSurge[idx] * 0.5, pentecostMode ? 'gold' : 'fire');
+          }
+        });
+      });
+
+      // ── Atualiza e desenha partículas de fogo ──
+      particles = particles.filter(p => p.life > 0);
+      particles.forEach(p => {
+        // Oscilação lateral natural da chama
+        p.wobble += 0.12;
+        p.x  += p.vx + Math.sin(p.wobble) * 1.2;
+        p.y  += p.vy;
+        p.vy *= 0.98; // leve desaceleração vertical
+        p.life -= p.decay;
+        p.size *= 0.985;
+        drawFlameParticle(p);
+      });
+
+      // ── Atualiza e desenha raios de luz ──
+      lightBolts = lightBolts.filter(b => b.life > 0);
+      lightBolts.forEach(b => {
+        b.life -= 0.15;
+        drawLightBolt(b);
+      });
+
+      ctx.restore();
+    }
+
+    // ── Inicialização MediaPipe ──
+    const hands = new Hands({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({
+      maxNumHands: 2, modelComplexity: 1,
+      minDetectionConfidence: 0.65, minTrackingConfidence: 0.65,
+    });
+    hands.onResults(onResults);
+
+    const cam = new Camera(videoEl, {
+      onFrame: async () => { await hands.send({ image: videoEl }); },
+      width: 1280, height: 720,
+    });
+    cam.start();
+  </script>
+</body>
+</html>
